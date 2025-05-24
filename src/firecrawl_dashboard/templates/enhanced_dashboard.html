@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firecrawl Monitoring Dashboard - Enhanced</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .job-card-enter {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        .job-card-enter-active {
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 300ms, transform 300ms;
+        }
+        .expandable-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .expandable-content.expanded {
+            max-height: 1000px;
+            transition: max-height 0.5s ease-in;
+        }
+        .status-badge {
+            @apply px-2 py-1 rounded-full text-xs font-medium;
+        }
+        .status-running { @apply bg-blue-500/20 text-blue-300 border border-blue-500/30; }
+        .status-completed { @apply bg-green-500/20 text-green-300 border border-green-500/30; }
+        .status-failed { @apply bg-red-500/20 text-red-300 border border-red-500/30; }
+        .status-queued { @apply bg-yellow-500/20 text-yellow-300 border border-yellow-500/30; }
+        .status-cancelled { @apply bg-gray-500/20 text-gray-300 border border-gray-500/30; }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
+            height: 4px;
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+        
+        .metric-card {
+            @apply bg-slate-800/50 backdrop-blur-sm border rounded-lg p-4 shadow-lg;
+        }
+        
+        .job-detail-row {
+            @apply flex justify-between py-1 text-sm border-b border-slate-700/30 last:border-b-0;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen">
+    <div class="container mx-auto p-4 max-w-7xl">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-4xl font-bold text-white bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                <i class="fas fa-spider mr-2"></i>Firecrawl Enhanced Monitor
+            </h1>
+            <div class="flex space-x-2">
+                <a href="/classic" class="bg-slate-600/20 hover:bg-slate-600/40 text-slate-300 border border-slate-500/30 px-4 py-2 rounded-lg transition-colors">
+                    <i class="fas fa-th-list mr-2"></i>Classic View
+                </a>
+                <button onclick="refreshAll()" class="bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-4 py-2 rounded-lg transition-colors">
+                    <i class="fas fa-sync-alt mr-2"></i>Refresh All
+                </button>
+                <button onclick="toggleAutoRefresh()" id="auto-refresh-btn" class="bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 border border-cyan-500/30 px-4 py-2 rounded-lg transition-colors">
+                    <i class="fas fa-play mr-2"></i>Auto Refresh
+                </button>
+            </div>
+        </div>
+        <!-- Real-time Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="metric-card border-purple-500/20">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-lg font-semibold text-purple-300">Health Status</h3>
+                    <button onclick="runFullHealthCheck()" class="text-xs bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-2 py-1 rounded">
+                        Test
+                    </button>
+                </div>
+                <div id="health-indicator" class="flex items-center">
+                    <div class="w-3 h-3 bg-gray-500 rounded-full mr-2" id="health-dot"></div>
+                    <span id="health-status" class="text-slate-300">Loading...</span>
+                </div>
+                <p id="health-details" class="text-xs text-slate-400 mt-1"></p>
+            </div>
+
+            <div class="metric-card border-cyan-500/20">
+                <h3 class="text-lg font-semibold text-cyan-300">Active Jobs</h3>
+                <div class="flex items-baseline">
+                    <span id="active-jobs-count" class="text-2xl font-bold text-cyan-300">0</span>
+                    <span class="text-slate-400 ml-2">running</span>
+                </div>
+                <div class="text-xs text-slate-400 mt-1">
+                    <span id="queued-jobs-count">0</span> queued
+                </div>
+            </div>
+
+            <div class="metric-card border-emerald-500/20">
+                <h3 class="text-lg font-semibold text-emerald-300">Success Rate</h3>
+                <div class="flex items-baseline">
+                    <span id="success-rate" class="text-2xl font-bold text-emerald-300">--</span>
+                    <span class="text-slate-400 ml-1">%</span>
+                </div>
+                <div class="text-xs text-slate-400 mt-1">
+                    <span id="completed-jobs-count">0</span> completed
+                </div>
+            </div>
+
+            <div class="metric-card border-orange-500/20">
+                <h3 class="text-lg font-semibold text-orange-300">Redis Queue</h3>
+                <div class="flex items-baseline">
+                    <span id="redis-queue-count" class="text-2xl font-bold text-orange-300">0</span>
+                    <span class="text-slate-400 ml-2">jobs</span>
+                </div>
+                <div class="text-xs text-slate-400 mt-1" id="redis-queue-details">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Job Creation Form -->
+        <div class="metric-card border-indigo-500/20 mb-6">
+            <h3 class="text-lg font-semibold text-indigo-300 mb-4">
+                <i class="fas fa-plus-circle mr-2"></i>Create New Job
+            </h3>
+            <form id="job-form" onsubmit="startJob(event)" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Job Type</label>
+                        <select name="job_type" class="w-full bg-slate-700/50 border border-slate-600/50 rounded-lg px-3 py-2 text-slate-300 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50">
+                            <option value="scrape">Single Page Scrape</option>
+                            <option value="crawl">Multi-Page Crawl</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Page Limit</label>
+                        <input type="number" name="limit" value="10" min="1" max="100" class="w-full bg-slate-700/50 border border-slate-600/50 rounded-lg px-3 py-2 text-slate-300 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">URLs (one per line)</label>
+                    <textarea name="urls" rows="3" placeholder="https://example.com&#10;https://another-site.com" class="w-full bg-slate-700/50 border border-slate-600/50 rounded-lg px-3 py-2 text-slate-300 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50"></textarea>
+                </div>
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                    <i class="fas fa-rocket mr-2"></i>Start Job
+                </button>
+            </form>
+        </div>
+
+        <!-- Enhanced Job Lists -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Active Jobs -->
+            <div class="metric-card border-blue-500/20">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-blue-300">
+                        <i class="fas fa-clock mr-2"></i>Active Jobs
+                    </h3>
+                    <div class="flex space-x-2">
+                        <span id="active-jobs-badge" class="status-badge status-running">0 running</span>
+                        <button onclick="cancelAllJobs()" class="text-xs bg-red-600/20 hover:bg-red-600/40 text-red-300 border border-red-500/30 px-2 py-1 rounded">
+                            Cancel All
+                        </button>
+                    </div>
+                </div>
+                <div id="active-jobs-list" class="space-y-3 max-h-96 overflow-y-auto">
+                    <!-- Active jobs will be populated here -->
+                </div>
+            </div>
+
+            <!-- Recent Jobs -->
+            <div class="metric-card border-green-500/20">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-green-300">
+                        <i class="fas fa-history mr-2"></i>Recent Jobs
+                    </h3>
+                    <span id="recent-jobs-badge" class="status-badge status-completed">0 completed</span>
+                </div>
+                <div id="recent-jobs-list" class="space-y-3 max-h-96 overflow-y-auto">
+                    <!-- Recent jobs will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Job Details Modal -->
+        <div id="job-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50" onclick="closeJobModal()">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-slate-800 border border-slate-700 rounded-lg max-w-4xl w-full max-h-[80vh] overflow-hidden" onclick="event.stopPropagation()">
+                    <div class="flex justify-between items-center p-6 border-b border-slate-700">
+                        <h2 class="text-xl font-semibold text-white" id="modal-title">Job Details</h2>
+                        <button onclick="closeJobModal()" class="text-slate-400 hover:text-white">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="p-6 overflow-y-auto max-h-[60vh]" id="modal-content">
+                        <!-- Job details will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshEnabled = false;
+        let autoRefreshInterval;
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshAll();
+        });
+
+        async function refreshAll() {
+            await Promise.all([
+                updateHealthStatus(),
+                updateJobsList(),
+                updateMetrics(),
+                updateQueueStatus()
+            ]);
+        }
+
+        async function updateHealthStatus() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                
+                const healthDot = document.getElementById('health-dot');
+                const healthStatus = document.getElementById('health-status');
+                const healthDetails = document.getElementById('health-details');
+                
+                if (data.overall_status === 'healthy') {
+                    healthDot.className = 'w-3 h-3 bg-green-500 rounded-full mr-2 animate-pulse';
+                    healthStatus.textContent = 'Healthy';
+                    healthDetails.textContent = `Response: ${data.health_endpoint.response_time_ms}ms`;
+                } else if (data.overall_status === 'degraded') {
+                    healthDot.className = 'w-3 h-3 bg-yellow-500 rounded-full mr-2 animate-pulse';
+                    healthStatus.textContent = 'Degraded';
+                    healthDetails.textContent = 'Some services experiencing issues';
+                } else {
+                    healthDot.className = 'w-3 h-3 bg-red-500 rounded-full mr-2 animate-pulse';
+                    healthStatus.textContent = 'Error';
+                    healthDetails.textContent = data.error || 'Service unavailable';
+                }
+            } catch (error) {
+                console.error('Health check failed:', error);
+                document.getElementById('health-status').textContent = 'Connection Error';
+            }
+        }
+
+        async function updateJobsList() {
+            try {
+                const response = await fetch('/api/jobs');
+                const data = await response.json();
+                
+                updateActiveJobsList(data.active_jobs || []);
+                updateRecentJobsList(data.recent_jobs || []);
+                
+                // Update badges
+                document.getElementById('active-jobs-badge').textContent = `${data.active_jobs?.length || 0} running`;
+                document.getElementById('recent-jobs-badge').textContent = `${data.recent_jobs?.length || 0} completed`;
+            } catch (error) {
+                console.error('Failed to fetch jobs:', error);
+            }
+        }
+
+        function updateActiveJobsList(jobs) {
+            const container = document.getElementById('active-jobs-list');
+            
+            if (jobs.length === 0) {
+                container.innerHTML = '<div class="text-slate-400 text-center py-8"><i class="fas fa-inbox text-2xl mb-2"></i><br>No active jobs</div>';
+                return;
+            }
+            
+            container.innerHTML = jobs.map(job => createJobCard(job, true)).join('');
+        }
+
+        function updateRecentJobsList(jobs) {
+            const container = document.getElementById('recent-jobs-list');
+            
+            if (jobs.length === 0) {
+                container.innerHTML = '<div class="text-slate-400 text-center py-8"><i class="fas fa-history text-2xl mb-2"></i><br>No recent jobs</div>';
+                return;
+            }
+            
+            container.innerHTML = jobs.map(job => createJobCard(job, false)).join('');
+        }
+
+        function createJobCard(job, isActive) {
+            const statusClass = getStatusClass(job.status);
+            const statusIcon = getStatusIcon(job.status);
+            const progressPercent = job.total_urls > 0 ? Math.round((job.completed_urls / job.total_urls) * 100) : 0;
+            
+            return `
+                <div class="bg-slate-700/30 border border-slate-600/30 rounded-lg p-4 hover:bg-slate-700/50 transition-colors">
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="flex-1">
+                            <div class="flex items-center mb-2">
+                                <span class="status-badge ${statusClass}">
+                                    <i class="${statusIcon} mr-1"></i>${job.status}
+                                </span>
+                                <span class="text-xs text-slate-400 ml-2">${job.job_type}</span>
+                            </div>
+                            <h4 class="font-medium text-slate-200 mb-1">Job ${job.job_id}</h4>
+                            <p class="text-sm text-slate-400">${job.total_urls} URL(s) • ${formatTime(job.created_at)}</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="showJobDetails('${job.job_id}')" class="text-slate-400 hover:text-blue-300 p-1">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${isActive ? `<button onclick="cancelJob('${job.job_id}')" class="text-slate-400 hover:text-red-300 p-1">
+                                <i class="fas fa-stop"></i>
+                            </button>` : ''}
+                            <button onclick="toggleJobExpansion('${job.job_id}')" class="text-slate-400 hover:text-purple-300 p-1">
+                                <i class="fas fa-chevron-down transform transition-transform" id="chevron-${job.job_id}"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    ${isActive && job.status === 'running' ? `
+                        <div class="mb-3">
+                            <div class="flex justify-between text-xs text-slate-400 mb-1">
+                                <span>Progress: ${job.completed_urls}/${job.total_urls}</span>
+                                <span>${progressPercent}%</span>
+                            </div>
+                            <div class="w-full bg-slate-600/50 rounded-full h-2">
+                                <div class="progress-bar rounded-full h-2" style="width: ${progressPercent}%"></div>
+                            </div>
+                            ${job.current_url ? `<p class="text-xs text-slate-500 mt-1 truncate">Processing: ${job.current_url}</p>` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="expandable-content" id="expansion-${job.job_id}">
+                        <div class="border-t border-slate-600/30 pt-3 mt-3 space-y-2">
+                            <div class="job-detail-row">
+                                <span class="text-slate-400">Status:</span>
+                                <span class="text-slate-300">${job.status}</span>
+                            </div>
+                            <div class="job-detail-row">
+                                <span class="text-slate-400">Created:</span>
+                                <span class="text-slate-300">${formatFullTime(job.created_at)}</span>
+                            </div>
+                            ${job.started_at ? `
+                                <div class="job-detail-row">
+                                    <span class="text-slate-400">Started:</span>
+                                    <span class="text-slate-300">${formatFullTime(job.started_at)}</span>
+                                </div>
+                            ` : ''}
+                            ${job.completed_at ? `
+                                <div class="job-detail-row">
+                                    <span class="text-slate-400">Completed:</span>
+                                    <span class="text-slate-300">${formatFullTime(job.completed_at)}</span>
+                                </div>
+                            ` : ''}
+                            <div class="job-detail-row">
+                                <span class="text-slate-400">Success Rate:</span>
+                                <span class="text-slate-300">${job.total_urls > 0 ? Math.round((job.completed_urls / job.total_urls) * 100) : 0}%</span>
+                            </div>
+                            ${job.errors && job.errors.length > 0 ? `
+                                <div class="job-detail-row">
+                                    <span class="text-slate-400">Errors:</span>
+                                    <span class="text-red-300">${job.errors.length}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Utility functions and event handlers
+        function getStatusClass(status) {
+            const statusMap = {
+                'running': 'status-running',
+                'completed': 'status-completed',
+                'failed': 'status-failed',
+                'queued': 'status-queued',
+                'cancelled': 'status-cancelled',
+                'waiting': 'status-queued',
+                'active': 'status-running',
+                'processing': 'status-running'
+            };
+            return statusMap[status] || 'status-queued';
+        }
+
+        function getStatusIcon(status) {
+            const iconMap = {
+                'running': 'fas fa-spinner fa-spin',
+                'completed': 'fas fa-check',
+                'failed': 'fas fa-times',
+                'queued': 'fas fa-clock',
+                'cancelled': 'fas fa-ban',
+                'waiting': 'fas fa-clock',
+                'active': 'fas fa-play',
+                'processing': 'fas fa-cog fa-spin'
+            };
+            return iconMap[status] || 'fas fa-question';
+        }
+
+        function formatTime(timestamp) {
+            if (!timestamp) return 'Unknown';
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) return 'Just now';
+            if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+            if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+            return `${Math.floor(diff / 86400000)}d ago`;
+        }
+
+        function formatFullTime(timestamp) {
+            if (!timestamp) return 'Unknown';
+            return new Date(timestamp).toLocaleString();
+        }
+
+        async function updateMetrics() {
+            try {
+                const response = await fetch('/api/metrics');
+                const data = await response.json();
+                
+                document.getElementById('active-jobs-count').textContent = data.active_jobs;
+                document.getElementById('success-rate').textContent = data.success_rate;
+                document.getElementById('completed-jobs-count').textContent = data.completed_jobs;
+            } catch (error) {
+                console.error('Failed to fetch metrics:', error);
+            }
+        }
+
+        async function updateQueueStatus() {
+            try {
+                const response = await fetch('/api/queue');
+                const data = await response.json();
+                
+                document.getElementById('redis-queue-count').textContent = data.total_jobs || 0;
+                document.getElementById('redis-queue-details').textContent = 
+                    `${data.active || 0} active, ${data.waiting || 0} waiting`;
+            } catch (error) {
+                console.error('Failed to fetch queue status:', error);
+                document.getElementById('redis-queue-details').textContent = 'Connection error';
+            }
+        }
+
+        function toggleJobExpansion(jobId) {
+            const expansion = document.getElementById(`expansion-${jobId}`);
+            const chevron = document.getElementById(`chevron-${jobId}`);
+            
+            if (expansion.classList.contains('expanded')) {
+                expansion.classList.remove('expanded');
+                chevron.style.transform = 'rotate(0deg)';
+            } else {
+                expansion.classList.add('expanded');
+                chevron.style.transform = 'rotate(180deg)';
+            }
+        }
+
+        function toggleAutoRefresh() {
+            const btn = document.getElementById('auto-refresh-btn');
+            
+            if (autoRefreshEnabled) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshEnabled = false;
+                btn.innerHTML = '<i class="fas fa-play mr-2"></i>Auto Refresh';
+                btn.className = btn.className.replace('bg-red-600/20 hover:bg-red-600/40 text-red-300 border-red-500/30', 'bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 border-cyan-500/30');
+            } else {
+                autoRefreshInterval = setInterval(refreshAll, 5000);
+                autoRefreshEnabled = true;
+                btn.innerHTML = '<i class="fas fa-pause mr-2"></i>Auto Refresh';
+                btn.className = btn.className.replace('bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 border-cyan-500/30', 'bg-red-600/20 hover:bg-red-600/40 text-red-300 border-red-500/30');
+            }
+        }
+
+        async function startJob(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            try {
+                const response = await fetch('/api/jobs/start', { method: 'POST', body: formData });
+                const result = await response.json();
+                if (result.success) {
+                    alert(`Job started! ID: ${result.job_id}`);
+                    event.target.reset();
+                    await updateJobsList();
+                } else {
+                    alert(`Failed: ${result.error}`);
+                }
+            } catch (error) {
+                alert('Failed to start job');
+            }
+        }
+
+        async function runFullHealthCheck() {
+            try {
+                const response = await fetch('/api/health/full');
+                const data = await response.json();
+                alert(`Health: ${data.overall_status}\nHealth Endpoint: ${data.health_endpoint.status}\nScrape Test: ${data.scrape_endpoint.status}`);
+            } catch (error) {
+                alert('Health check failed');
+            }
+        }
+        async function showJobDetails(jobId) {
+            try {
+                const response = await fetch(`/api/jobs/${jobId}`);
+                const job = await response.json();
+                
+                document.getElementById('modal-title').textContent = `Job ${jobId} Details`;
+                
+                const modalContent = document.getElementById('modal-content');
+                modalContent.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-lg font-semibold text-white mb-4">Job Information</h3>
+                            <div class="space-y-3">
+                                <div class="job-detail-row">
+                                    <span class="text-slate-400">Job ID:</span>
+                                    <span class="text-slate-300 font-mono">${job.job_id}</span>
+                                </div>
+                                <div class="job-detail-row">
+                                    <span class="text-slate-400">Type:</span>
+                                    <span class="text-slate-300">${job.job_type}</span>
+                                </div>
+                                <div class="job-detail-row">
+                                    <span class="text-slate-400">Status:</span>
+                                    <span class="status-badge ${getStatusClass(job.status)}">${job.status}</span>
+                                </div>
+                                <div class="job-detail-row">
+                                    <span class="text-slate-400">Total URLs:</span>
+                                    <span class="text-slate-300">${job.total_urls}</span>
+                                </div>
+                                <div class="job-detail-row">
+                                    <span class="text-slate-400">Completed:</span>
+                                    <span class="text-green-300">${job.completed_urls}</span>
+                                </div>
+                                <div class="job-detail-row">
+                                    <span class="text-slate-400">Errors:</span>
+                                    <span class="text-red-300">${job.errors?.length || 0}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h3 class="text-lg font-semibold text-white mb-4">Performance</h3>
+                            <div class="space-y-3">
+                                ${job.processing_rate ? `
+                                    <div class="job-detail-row">
+                                        <span class="text-slate-400">Processing Rate:</span>
+                                        <span class="text-slate-300">${job.processing_rate.toFixed(2)} URLs/min</span>
+                                    </div>
+                                ` : ''}
+                                ${job.estimated_completion ? `
+                                    <div class="job-detail-row">
+                                        <span class="text-slate-400">ETA:</span>
+                                        <span class="text-slate-300">${job.estimated_completion}</span>
+                                    </div>
+                                ` : ''}
+                                ${job.average_response_time ? `
+                                    <div class="job-detail-row">
+                                        <span class="text-slate-400">Avg Response:</span>
+                                        <span class="text-slate-300">${job.average_response_time.toFixed(0)}ms</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('job-modal').classList.remove('hidden');
+            } catch (error) {
+                console.error('Failed to fetch job details:', error);
+                alert('Failed to load job details');
+            }
+        }
+
+        function closeJobModal() {
+            document.getElementById('job-modal').classList.add('hidden');
+        }
+
+        async function cancelJob(jobId) {
+            if (!confirm('Are you sure you want to cancel this job?')) return;
+            
+            try {
+                const response = await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    await updateJobsList();
+                } else {
+                    alert(`Failed to cancel job: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('Failed to cancel job:', error);
+                alert('Failed to cancel job');
+            }
+        }
+
+        async function cancelAllJobs() {
+            if (!confirm('Are you sure you want to cancel ALL active jobs?')) return;
+            
+            try {
+                const response = await fetch('/api/jobs', { method: 'DELETE' });
+                const result = await response.json();
+                
+                alert(`${result.message || 'Operation completed'}`);
+                await updateJobsList();
+            } catch (error) {
+                console.error('Failed to cancel jobs:', error);
+                alert('Failed to cancel jobs');
+            }
+        }
+    </script>
+</body>
+</html>

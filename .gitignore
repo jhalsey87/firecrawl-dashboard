@@ -73,3 +73,7 @@ uv.lock
 # Project specific
 *.sqlite
 *.db
+src/firecrawl_dashboard/templates/dashboard copy.html
+src/firecrawl_dashboard/templates/enhanced_dashboard copy.html
+refactoring_plan.md
+REFACTORING_PROGRESS.md
