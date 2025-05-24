@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firecrawl Monitoring Dashboard</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen">
+    <div class="container mx-auto p-4">
+        <h1 class="text-4xl font-bold mb-6 text-white bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">🕷️ Firecrawl Monitor</h1>
+        
+        <!-- Status Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-slate-800/50 backdrop-blur-sm border border-purple-500/20 p-4 rounded-lg shadow-lg">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-purple-300">Health Status</h2>
+                    <button onclick="runFullHealthCheck()" class="text-sm bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-2 py-1 rounded">
+                        Full Test
+                    </button>
+                </div>
+                <p id="health-status" class="text-slate-300">Loading...</p>
+                <p id="health-details" class="text-xs text-slate-400 mt-1"></p>
+            </div>
+            <div class="bg-slate-800/50 backdrop-blur-sm border border-cyan-500/20 p-4 rounded-lg shadow-lg">
+                <h2 class="text-lg font-semibold text-cyan-300">Active Jobs</h2>
+                <p id="active-jobs" class="text-slate-300">0</p>
+            </div>
+            <div class="bg-slate-800/50 backdrop-blur-sm border border-emerald-500/20 p-4 rounded-lg shadow-lg">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-emerald-300">Redis Queue</h2>
+                    <button onclick="refreshQueueStatus()" class="text-sm bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded">
+                        <i class="fas fa-refresh"></i>
+                    </button>
+                </div>
+                <p id="queue-status" class="text-slate-300">Loading...</p>
+                <div id="queue-details" class="text-xs text-slate-400 mt-1"></div>
+            </div>
+        </div>
+        
+        <!-- Emergency Queue Control -->
+        <div id="queue-alert" class="mb-6 hidden">
+            <div class="bg-red-900/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-lg backdrop-blur-sm">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <strong>High Queue Activity Detected!</strong>
+                        <span id="queue-warning-text"></span>
+                    </div>
+                    <button onclick="emergencyClearQueue()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded text-sm shadow-lg">
+                        <i class="fas fa-fire-extinguisher mr-1"></i>Emergency Clear
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-slate-800/50 backdrop-blur-sm border border-purple-500/20 p-6 rounded-lg shadow-lg">
+                <h3 class="text-xl font-semibold mb-4 text-purple-300">Start New Job</h3>
+                <form hx-post="/api/jobs/start" hx-target="#job-result">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">URLs (one per line)</label>
+                        <textarea name="urls" rows="4" class="w-full bg-slate-700/50 border border-slate-600 rounded px-3 py-2 text-slate-200 placeholder-slate-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
+                                  placeholder="https://example.com&#10;https://example.com/about"
+                                  onchange="checkForSitemaps(this.value)"></textarea>
+                        <div id="sitemap-warning" class="hidden mt-2 p-3 bg-yellow-900/30 border border-yellow-500/50 text-yellow-300 rounded backdrop-blur-sm">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            <strong>Sitemap detected!</strong> 
+                            <span id="sitemap-message"></span>
+                            <div class="mt-2 text-sm">
+                                <strong>Recommendations:</strong><br>
+                                • Use "Scrape" mode to get sitemap content<br>
+                                • Or use start page URL with low limit (5-10)<br>
+                                • Large sitemaps can cause job floods!
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Job Type</label>
+                        <select name="job_type" class="w-full bg-slate-700/50 border border-slate-600 rounded px-3 py-2 text-slate-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="updateJobTypeHelp(this.value)">
+                            <option value="scrape">Scrape (single pages)</option>
+                            <option value="crawl">Crawl (follow links)</option>
+                        </select>
+                        <div id="job-type-help" class="text-xs text-slate-400 mt-1">
+                            Scrape: Process each URL individually. Best for sitemaps and specific pages.
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Limit (for crawl)</label>
+                        <input type="number" name="limit" value="5" min="1" max="100" class="w-full bg-slate-700/50 border border-slate-600 rounded px-3 py-2 text-slate-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                        <div class="text-xs text-slate-400 mt-1">
+                            <strong>⚠️ Start small!</strong> Use 5-10 for testing. Large limits can cause floods.
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2 px-4 rounded hover:from-purple-700 hover:to-pink-700 shadow-lg transition-all duration-200">
+                        Start Job
+                    </button>
+                </form>
+                <div id="job-result" class="mt-4"></div>
+            </div>
+            
+            <div class="bg-slate-800/50 backdrop-blur-sm border border-cyan-500/20 p-6 rounded-lg shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-cyan-300">Active Jobs</h3>
+                    <div class="flex space-x-2">
+                        <button onclick="refreshJobs()" class="text-sm bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 border border-cyan-500/30 px-3 py-1 rounded">
+                            <i class="fas fa-refresh mr-1"></i>Refresh
+                        </button>
+                        <button onclick="cancelAllJobs()" class="text-sm bg-red-600/20 hover:bg-red-600/40 text-red-300 border border-red-500/30 px-3 py-1 rounded">
+                            <i class="fas fa-stop mr-1"></i>Cancel All
+                        </button>
+                    </div>
+                </div>
+                <div id="jobs-list">Loading...</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Job Details Modal -->
+    <div id="job-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm overflow-y-auto h-full w-full hidden">
+        <div class="relative top-20 mx-auto p-5 border border-purple-500/30 w-11/12 max-w-4xl shadow-2xl rounded-lg bg-slate-800/90 backdrop-blur-md">
+            <div class="mt-3">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium text-purple-300" id="modal-job-title">Job Details</h3>
+                    <button onclick="closeJobModal()" class="text-slate-400 hover:text-slate-300">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                <div id="modal-job-content" class="text-slate-300">
+                    Loading job details...
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-refresh dashboard
+        async function refreshDashboard() {
+            try {
+                const [health, jobs, metrics, queue] = await Promise.all([
+                    fetch('/api/health').then(r => r.json()),
+                    fetch('/api/jobs').then(r => r.json()),
+                    fetch('/api/metrics').then(r => r.json()),
+                    fetch('/api/queue').then(r => r.json())
+                ]);
+                
+                // Update health status
+                updateHealthStatus(health);
+                document.getElementById('active-jobs').textContent = metrics.active_jobs;
+                updateQueueStatus(queue);
+                updateJobsList(jobs);
+                
+            } catch (error) {
+                console.error('Dashboard refresh failed:', error);
+            }
+        }
+        
+        function updateHealthStatus(health) {
+            const element = document.getElementById('health-status');
+            const details = document.getElementById('health-details');
+            
+            element.textContent = health.overall_status;
+            if (health.health_endpoint.response_time_ms) {
+                details.textContent = `Response: ${health.health_endpoint.response_time_ms}ms`;
+            }
+        }
+        
+        function updateQueueStatus(queue) {
+            const statusElement = document.getElementById('queue-status');
+            const detailsElement = document.getElementById('queue-details');
+            const alertElement = document.getElementById('queue-alert');
+            const warningElement = document.getElementById('queue-warning-text');
+            
+            if (!queue.connected) {
+                statusElement.textContent = 'Disconnected';
+                statusElement.className = 'text-red-400';
+                detailsElement.textContent = queue.error || 'Redis not available';
+                alertElement.classList.add('hidden');
+                return;
+            }
+            
+            statusElement.textContent = queue.total_jobs + ' jobs';
+            statusElement.className = queue.total_jobs > 10 ? 'text-red-400' : 
+                                     queue.total_jobs > 5 ? 'text-yellow-400' : 'text-emerald-400';
+            
+            // Show queue details
+            let queueInfo = [];
+            for (const [queueName, counts] of Object.entries(queue.queues)) {
+                const total = counts.active + counts.waiting + counts.delayed;
+                if (total > 0) {
+                    queueInfo.push(`${queueName}: ${total}`);
+                }
+            }
+            detailsElement.textContent = queueInfo.join(', ') || 'All queues empty';
+            
+            // Show emergency alert for high queue activity
+            if (queue.total_jobs > 20) {
+                warningElement.textContent = ` ${queue.total_jobs} jobs in Redis queues! This may be causing the flood.`;
+                alertElement.classList.remove('hidden');
+            } else {
+                alertElement.classList.add('hidden');
+            }
+        }
+        
+        function updateJobsList(jobs) {
+            const jobsList = document.getElementById('jobs-list');
+            if (jobs.active_jobs.length === 0) {
+                jobsList.innerHTML = '<p class="text-slate-400">No active jobs</p>';
+            } else {
+                jobsList.innerHTML = jobs.active_jobs.map(job => `
+                    <div class="border-b border-slate-700 pb-2 mb-2">
+                        <div class="flex justify-between items-center">
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium cursor-pointer text-cyan-400 hover:text-cyan-300" onclick="showJobDetails('${job.job_id}')">${job.job_id}</span>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="text-sm text-slate-400">${job.status}</span>
+                                        ${getJobSourceBadge(job.source)}
+                                    </div>
+                                </div>
+                                <div class="text-sm text-slate-300">${job.completed_urls || 0}/${job.total_urls || 0} URLs</div>
+                            </div>
+                            <button onclick="showJobDetails('${job.job_id}')" class="text-cyan-400 hover:text-cyan-300 text-sm ml-2">
+                                <i class="fas fa-info-circle"></i>
+                            </button>
+                        </div>
+                        ${job.total_urls > 0 ? `
+                            <div class="w-full bg-slate-700 rounded-full h-2 mt-2">
+                                <div class="bg-gradient-to-r from-cyan-500 to-purple-500 h-2 rounded-full" style="width: ${Math.round((job.completed_urls / job.total_urls) * 100)}%"></div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            }
+        }
+        
+        function getJobSourceBadge(source) {
+            if (source === 'redis_queue') {
+                return '<span class="text-xs bg-red-900/50 text-red-300 border border-red-500/30 px-2 py-1 rounded">Queue</span>';
+            } else if (source === 'firecrawl') {
+                return '<span class="text-xs bg-orange-900/50 text-orange-300 border border-orange-500/30 px-2 py-1 rounded">External</span>';
+            } else {
+                return '<span class="text-xs bg-purple-900/50 text-purple-300 border border-purple-500/30 px-2 py-1 rounded">Dashboard</span>';
+            }
+        }
+        
+        async function runFullHealthCheck() {
+            const healthStatus = document.getElementById('health-status');
+            const healthDetails = document.getElementById('health-details');
+            const originalStatus = healthStatus.textContent;
+            const originalDetails = healthDetails.textContent;
+            
+            healthStatus.textContent = 'testing...';
+            healthDetails.textContent = 'Running scrape test...';
+            
+            try {
+                const health = await fetch('/api/health/full').then(r => r.json());
+                healthStatus.textContent = health.overall_status;
+                
+                if (health.scrape_endpoint.status === 'healthy') {
+                    healthDetails.textContent = `✅ Full test passed (${health.scrape_endpoint.response_time_ms}ms)`;
+                } else {
+                    healthDetails.textContent = `❌ Scrape test failed: ${health.scrape_endpoint.error || 'Unknown error'}`;
+                }
+                
+                setTimeout(() => {
+                    if (healthDetails.textContent.includes('test')) {
+                        healthDetails.textContent = `Response: ${health.health_endpoint.response_time_ms}ms`;
+                    }
+                }, 10000);
+                
+            } catch (error) {
+                healthStatus.textContent = originalStatus;
+                healthDetails.textContent = `❌ Test failed: ${error.message}`;
+                setTimeout(() => {
+                    healthDetails.textContent = originalDetails;
+                }, 5000);
+            }
+        }
+        
+        async function refreshQueueStatus() {
+            try {
+                const queue = await fetch('/api/queue').then(r => r.json());
+                updateQueueStatus(queue);
+            } catch (error) {
+                console.error('Failed to refresh queue status:', error);
+            }
+        }
+        
+        function emergencyClearQueue() {
+            if (confirm('🚨 EMERGENCY: This will DELETE ALL Redis queue data and stop the job flood!\\n\\nThis action cannot be undone. Continue?')) {
+                const button = document.querySelector('button[onclick="emergencyClearQueue()"]');
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Clearing...';
+                button.disabled = true;
+                
+                fetch('/api/queue', {method: 'DELETE'})
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showAlert(`Emergency clear successful: ${data.message}`, 'success');
+                            document.getElementById('queue-alert').classList.add('hidden');
+                            refreshDashboard();
+                        } else {
+                            showAlert('Emergency clear failed: ' + data.error, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        showAlert('Emergency clear error: ' + error, 'error');
+                    })
+                    .finally(() => {
+                        button.innerHTML = originalText;
+                        button.disabled = false;
+                    });
+            }
+        }
+        
+        function cancelAllJobs() {
+            if (confirm('Are you sure you want to cancel ALL active jobs?')) {
+                const button = document.querySelector('button[onclick="cancelAllJobs()"]');
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Cancelling...';
+                button.disabled = true;
+                
+                fetch('/api/jobs', {method: 'DELETE'})
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showAlert(data.message, 'success');
+                            refreshDashboard();
+                        } else {
+                            showAlert('Failed to cancel jobs: ' + data.error, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        showAlert('Error cancelling jobs: ' + error, 'error');
+                    })
+                    .finally(() => {
+                        button.innerHTML = originalText;
+                        button.disabled = false;
+                    });
+            }
+        }
+        
+        function showJobDetails(jobId) {
+            const modal = document.getElementById('job-modal');
+            const title = document.getElementById('modal-job-title');
+            const content = document.getElementById('modal-job-content');
+            
+            modal.classList.remove('hidden');
+            title.textContent = 'Job Details: ' + jobId;
+            content.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+            
+            fetch('/api/jobs/' + jobId)
+                .then(response => response.json())
+                .then(job => {
+                    content.innerHTML = `
+                        <div class="bg-slate-700/50 p-4 rounded mb-4">
+                            <h4 class="font-semibold mb-2 text-slate-200">Job Overview</h4>
+                            <p class="text-slate-300"><strong>Status:</strong> ${job.status}</p>
+                            <p class="text-slate-300"><strong>Type:</strong> ${job.job_type}</p>
+                            <p class="text-slate-300"><strong>Progress:</strong> ${job.completed_urls || 0}/${job.total_urls || 0} URLs</p>
+                            <p class="text-slate-300"><strong>Source:</strong> ${job.source}</p>
+                        </div>
+                        <div class="flex justify-end space-x-2">
+                            ${job.status === 'running' || job.status === 'active' ? 
+                                `<button onclick="cancelJobFromModal('${job.job_id}')" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">Cancel Job</button>` : ''}
+                            <button onclick="closeJobModal()" class="bg-slate-600 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded">Close</button>
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    content.innerHTML = `
+                        <div class="text-center py-8">
+                            <p class="text-red-400">Failed to load job details</p>
+                            <button onclick="closeJobModal()" class="mt-4 bg-slate-600 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded">Close</button>
+                        </div>
+                    `;
+                });
+        }
+        
+        function closeJobModal() {
+            document.getElementById('job-modal').classList.add('hidden');
+        }
+        
+        function cancelJobFromModal(jobId) {
+            if (confirm('Cancel this job?')) {
+                fetch('/api/jobs/' + jobId, {method: 'DELETE'})
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showAlert('Job cancelled', 'success');
+                            closeJobModal();
+                            refreshDashboard();
+                        } else {
+                            showAlert('Failed to cancel: ' + data.error, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        showAlert('Error: ' + error, 'error');
+                    });
+            }
+        }
+        
+        function refreshJobs() {
+            refreshDashboard();
+        }
+        
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-emerald-900/50 border-emerald-500/50 text-emerald-300' : 'bg-red-900/50 border-red-500/50 text-red-300';
+            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+            
+            alertDiv.innerHTML = `
+                <div class="${bgColor} border px-4 py-3 rounded-lg mb-4 fixed top-4 right-4 z-50 max-w-md backdrop-blur-sm">
+                    <i class="fas ${icon} mr-2"></i>${message}
+                </div>
+            `;
+            
+            document.body.appendChild(alertDiv);
+            setTimeout(() => {
+                if (document.body.contains(alertDiv)) {
+                    document.body.removeChild(alertDiv);
+                }
+            }, 5000);
+        }
+        
+        function checkForSitemaps(urls) {
+            const urlList = urls.split('\n').filter(url => url.trim());
+            const sitemapWarning = document.getElementById('sitemap-warning');
+            const sitemapMessage = document.getElementById('sitemap-message');
+            
+            const sitemapUrls = urlList.filter(url => 
+                url.toLowerCase().includes('sitemap') || 
+                url.toLowerCase().includes('.xml') ||
+                url.toLowerCase().includes('robots.txt')
+            );
+            
+            if (sitemapUrls.length > 0) {
+                sitemapMessage.textContent = `${sitemapUrls.length} sitemap/XML URL(s) detected. These may contain hundreds of links!`;
+                sitemapWarning.classList.remove('hidden');
+            } else {
+                sitemapWarning.classList.add('hidden');
+            }
+        }
+        
+        function updateJobTypeHelp(jobType) {
+            const helpDiv = document.getElementById('job-type-help');
+            if (jobType === 'crawl') {
+                helpDiv.textContent = 'Crawl: Follow links from starting page. Can discover many URLs. Use low limits!';
+                helpDiv.className = 'text-xs text-yellow-400 mt-1 font-medium';
+            } else {
+                helpDiv.textContent = 'Scrape: Process each URL individually. Best for sitemaps and specific pages.';
+                helpDiv.className = 'text-xs text-slate-400 mt-1';
+            }
+        }
+        
+        // Auto-refresh every 10 seconds
+        setInterval(refreshDashboard, 10000);
+        refreshDashboard(); // Initial load
+        
+        // Handle form submissions
+        document.body.addEventListener('htmx:afterRequest', function(e) {
+            if (e.detail.xhr.status === 200) {
+                const response = JSON.parse(e.detail.xhr.responseText);
+                const resultDiv = document.getElementById('job-result');
+                if (response.success) {
+                    resultDiv.innerHTML = `<div class="bg-emerald-900/30 border border-emerald-500/50 text-emerald-300 px-4 py-3 rounded backdrop-blur-sm">${response.message}</div>`;
+                    setTimeout(refreshDashboard, 1000);
+                } else {
+                    resultDiv.innerHTML = `<div class="bg-red-900/30 border border-red-500/50 text-red-300 px-4 py-3 rounded backdrop-blur-sm">Error: ${response.error}</div>`;
+                }
+                setTimeout(() => resultDiv.innerHTML = '', 5000);
+            }
+        });
+    </script>
+</body>
+</html>
