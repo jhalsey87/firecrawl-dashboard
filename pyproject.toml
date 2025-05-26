@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "firecrawl-dashboard"
 version = "0.1.0"
 description = "Web monitoring dashboard for self-hosted Firecrawl instances"
-readme = "docs/README.md"
+readme = "README.md"
 requires-python = ">=3.12"
 authors = [
     {name = "Christian", email = "christian@example.com"},
@@ -31,10 +31,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-username/firecrawl-dashboard"
-Documentation = "https://github.com/your-username/firecrawl-dashboard/blob/main/docs/README.md"
-Repository = "https://github.com/your-username/firecrawl-dashboard.git"
-Issues = "https://github.com/your-username/firecrawl-dashboard/issues"
+Homepage = "https://github.com/cbl789/firecrawl-dashboard"
+Documentation = "https://github.com/cbl789/firecrawl-dashboard/blob/main/README.md"
+Repository = "https://github.com/cbl789/firecrawl-dashboard.git"
+Issues = "https://github.com/cbl789/firecrawl-dashboard/issues"
 
 [project.scripts]
 firecrawl-dashboard = "firecrawl_dashboard.main:main"
