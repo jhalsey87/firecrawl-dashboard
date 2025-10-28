@@ -60,8 +60,38 @@ class JobService:
         """Get enhanced jobs combining dashboard and Redis data"""
         # Start with dashboard jobs
         all_jobs = self.get_all_jobs()
-        
-        # Add Redis queue jobs (simplified for now)
+
+        # Get active crawl jobs from Redis
+        try:
+            crawl_job_ids = await self.redis_service.get_active_crawl_jobs()
+
+            # Fetch details for each crawl job from Firecrawl API
+            for job_id in crawl_job_ids[:20]:  # Limit to 20 jobs to avoid overwhelming
+                job_details = await self.get_job_details_enhanced(job_id)
+                if job_details:
+                    # Convert status to JobStatus enum, fallback to UNKNOWN if invalid
+                    try:
+                        job_status = JobStatus(job_details.get("status", "unknown"))
+                    except ValueError:
+                        job_status = JobStatus.UNKNOWN
+
+                    # Convert to DetailedJob object
+                    crawl_job = DetailedJob(
+                        job_id=job_id,
+                        status=job_status,
+                        job_type=JobType.CRAWL,
+                        total_urls=job_details.get("total_urls", job_details.get("total", 0)),
+                        completed_urls=job_details.get("completed_urls", job_details.get("completed", 0)),
+                        source="firecrawl"
+                    )
+                    crawl_job.current_url = job_details.get("current_url")
+                    crawl_job.errors = job_details.get("errors", [])
+                    crawl_job.metadata = job_details
+                    all_jobs.append(crawl_job)
+        except Exception as e:
+            print(f"Error getting crawl jobs from Redis: {e}")
+
+        # Add Redis queue summary job
         try:
             queue_status = await self.redis_service.get_queue_status()
             if queue_status.get("connected") and queue_status.get("total_jobs", 0) > 0:
@@ -77,7 +107,7 @@ class JobService:
                 all_jobs.append(queue_job)
         except Exception as e:
             print(f"Error getting Redis queue jobs: {e}")
-        
+
         return all_jobs
     
     def get_legacy_jobs_format(self) -> List[dict]:
@@ -124,8 +154,8 @@ class JobService:
                 async with aiohttp.ClientSession() as session:
                     headers = {"Authorization": f"Bearer {settings.firecrawl_api_key}"} if settings.firecrawl_api_key and settings.firecrawl_api_key != "dummy" else {}
                     
-                    # Try different endpoints to get job status
-                    for endpoint in [f"/v0/crawl/{job_id}", f"/v1/crawl/{job_id}", f"/crawl/{job_id}"]:
+                    # Try different endpoints to get job status (v2 first, then v1, v0)
+                    for endpoint in [f"/v2/crawl/{job_id}", f"/v1/crawl/{job_id}", f"/v0/crawl/{job_id}", f"/crawl/{job_id}"]:
                         try:
                             async with session.get(f"{settings.firecrawl_api_url}{endpoint}", headers=headers, timeout=10) as response:
                                 if response.status == 200:

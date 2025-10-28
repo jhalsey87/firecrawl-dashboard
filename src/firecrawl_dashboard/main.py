@@ -228,8 +228,8 @@ async def cancel_job(job_id: str):
         async with aiohttp.ClientSession() as session:
             headers = {"Authorization": f"Bearer {FIRECRAWL_API_KEY}"} if FIRECRAWL_API_KEY and FIRECRAWL_API_KEY != "dummy" else {}
             
-            # Try different endpoints to cancel the job
-            for endpoint in [f"/v0/crawl/{job_id}", f"/v1/crawl/{job_id}", f"/crawl/{job_id}"]:
+            # Try different endpoints to cancel the job (v2 first, then v1, v0)
+            for endpoint in [f"/v2/crawl/{job_id}", f"/v1/crawl/{job_id}", f"/v0/crawl/{job_id}", f"/crawl/{job_id}"]:
                 try:
                     async with session.delete(f"{FIRECRAWL_API_URL}{endpoint}", headers=headers, timeout=30) as response:
                         if response.status == 200:

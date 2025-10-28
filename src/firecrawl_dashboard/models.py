@@ -13,6 +13,7 @@ class JobStatus(str, Enum):
     ACTIVE = "active"
     PROCESSING = "processing"
     RUNNING = "running"
+    SCRAPING = "scraping"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"

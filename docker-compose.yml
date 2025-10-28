@@ -1,0 +1,45 @@
+name: firecrawl-dashboard
+
+services:
+  dashboard:
+    build: .
+    container_name: firecrawl-dashboard
+    ports:
+      - "8000:8000"
+    environment:
+      - FIRECRAWL_API_URL=${FIRECRAWL_API_URL:-http://api:3002}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-fc-test-key}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_DB=${REDIS_DB:-0}
+      - DASHBOARD_HOST=${DASHBOARD_HOST:-0.0.0.0}
+      - DASHBOARD_PORT=${DASHBOARD_PORT:-8000}
+      - UPDATE_INTERVAL=${UPDATE_INTERVAL:-5}
+      - ENABLE_AUTO_SCRAPE_TEST=${ENABLE_AUTO_SCRAPE_TEST:-false}
+      - FIRECRAWL_FORMATS=${FIRECRAWL_FORMATS:-markdown,html}
+      - FIRECRAWL_ONLY_MAIN_CONTENT=${FIRECRAWL_ONLY_MAIN_CONTENT:-true}
+      - FIRECRAWL_WAIT_FOR=${FIRECRAWL_WAIT_FOR:-3000}
+      - FIRECRAWL_TIMEOUT=${FIRECRAWL_TIMEOUT:-30}
+      - FIRECRAWL_MAX_URLS_PER_SITE=${FIRECRAWL_MAX_URLS_PER_SITE:-10}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:3b}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    env_file:
+      - .env
+    networks:
+      - firecrawl_backend
+      - default
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  default:
+    name: firecrawl-dashboard-network
+  firecrawl_backend:
+    external: true
