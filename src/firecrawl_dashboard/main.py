@@ -146,8 +146,8 @@ async def get_jobs():
         recent_jobs_list.sort(key=lambda x: x.get("created_at", ""), reverse=True)
 
         return {
-            "active_jobs": active_jobs_list[:50],  # Increased from 20 to show more jobs
-            "recent_jobs": recent_jobs_list[:50],  # Increased from 20 to show more jobs
+            "active_jobs": active_jobs_list[:100],  # Increased to 100 for pagination
+            "recent_jobs": recent_jobs_list[:100],  # Increased to 100 for pagination
             "queue_count": len([j for j in jobs_data if j.get("source") == "redis_queue"]),
             "dashboard_count": len([j for j in jobs_data if j.get("source") == "dashboard"]),
             "firecrawl_count": 0  # Can be enhanced later
