@@ -48,6 +48,12 @@ templates = Jinja2Templates(directory=str(templates_dir))
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard_home(request: Request):
+    """Clean dashboard following 'Storytelling with Data' principles"""
+    return templates.TemplateResponse("clean_dashboard.html", {"request": request})
+
+
+@app.get("/enhanced", response_class=HTMLResponse)
+async def dashboard_enhanced(request: Request):
     """Enhanced dashboard page with expandable job cards"""
     return templates.TemplateResponse("enhanced_dashboard.html", {"request": request})
 

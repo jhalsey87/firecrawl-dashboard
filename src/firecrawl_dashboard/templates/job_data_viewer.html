@@ -6,49 +6,115 @@
     <title>Scraped Data - Job {{ job_id }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .markdown-content {
-            max-height: 600px;
-            overflow-y: auto;
+        /* Clean color palette matching dashboard */
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --accent-blue: #3b82f6;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-error: #ef4444;
         }
-        .markdown-content pre {
-            background: #1e293b;
+
+        body {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        .card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .content-area {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
             padding: 1rem;
-            border-radius: 0.5rem;
-            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        .tab-button {
+            padding: 0.5rem 1rem;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            background: none;
+            border-top: none;
+            border-left: none;
+            border-right: none;
+        }
+
+        .tab-button:hover {
+            color: var(--text-primary);
+        }
+
+        .tab-button.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+            font-weight: 600;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
     </style>
 </head>
-<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen text-white">
-    <div class="container mx-auto px-4 py-8">
+<body>
+    <div class="max-w-6xl mx-auto p-6">
         <!-- Header -->
-        <div class="mb-8">
-            <a href="/" class="inline-flex items-center text-blue-400 hover:text-blue-300 mb-4">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                </svg>
-                Back to Dashboard
+        <div class="mb-6">
+            <a href="/" style="color: var(--accent-blue); text-decoration: none; font-size: 0.875rem; display: inline-block; margin-bottom: 1rem;">
+                ← Back to Dashboard
             </a>
-            <h1 class="text-3xl font-bold mb-2">Scraped Data Viewer</h1>
-            <p class="text-slate-400">Job ID: <span class="font-mono text-sm">{{ job_id }}</span></p>
+            <h1 class="text-2xl font-bold mb-1">Scraped Data</h1>
+            <p style="color: var(--text-secondary); font-size: 0.875rem;">
+                Job ID: <span style="font-family: monospace;">{{ job_id }}</span>
+            </p>
         </div>
 
         <!-- Loading State -->
-        <div id="loading" class="text-center py-12">
-            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-            <p class="mt-4 text-slate-400">Loading scraped data...</p>
+        <div id="loading" class="card text-center py-8">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-b-transparent" style="border-color: var(--accent-blue); border-bottom-color: transparent;"></div>
+            <p class="mt-3" style="color: var(--text-secondary)">Loading scraped data...</p>
         </div>
 
         <!-- Error State -->
-        <div id="error" class="hidden">
-            <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-6">
-                <div class="flex items-start">
-                    <svg class="w-6 h-6 text-red-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <div>
-                        <h3 class="text-lg font-semibold text-red-300 mb-2">Error Loading Data</h3>
-                        <p id="error-message" class="text-slate-300"></p>
-                    </div>
+        <div id="error" class="hidden card" style="border-color: var(--accent-error);">
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 flex-shrink-0" style="color: var(--accent-error);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div>
+                    <h3 class="font-semibold mb-1" style="color: var(--accent-error);">Error Loading Data</h3>
+                    <p id="error-message" style="color: var(--text-secondary);"></p>
                 </div>
             </div>
         </div>
@@ -56,37 +122,37 @@
         <!-- Data Display -->
         <div id="data-container" class="hidden">
             <!-- Job Status Info -->
-            <div id="job-info" class="bg-slate-800/50 rounded-lg p-6 mb-6 border border-slate-700/50">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="card mb-6">
+                <div class="stat-grid">
                     <div>
-                        <p class="text-slate-400 text-sm mb-1">Status</p>
-                        <p id="job-status" class="text-lg font-semibold"></p>
+                        <div class="stat-label">Status</div>
+                        <div class="stat-value" id="job-status" style="color: var(--text-primary);">—</div>
                     </div>
                     <div>
-                        <p class="text-slate-400 text-sm mb-1">Total Pages</p>
-                        <p id="job-total" class="text-lg font-semibold"></p>
+                        <div class="stat-label">Total Pages</div>
+                        <div class="stat-value" id="job-total" style="color: var(--text-primary);">0</div>
                     </div>
                     <div>
-                        <p class="text-slate-400 text-sm mb-1">Completed</p>
-                        <p id="job-completed" class="text-lg font-semibold"></p>
+                        <div class="stat-label">Completed</div>
+                        <div class="stat-value" id="job-completed" style="color: var(--accent-success);">0</div>
                     </div>
                     <div>
-                        <p class="text-slate-400 text-sm mb-1">Data Available</p>
-                        <p id="data-count" class="text-lg font-semibold"></p>
+                        <div class="stat-label">Data Available</div>
+                        <div class="stat-value" id="data-count" style="color: var(--accent-blue);">0</div>
                     </div>
                 </div>
             </div>
 
             <!-- No Data Message -->
-            <div id="no-data" class="hidden bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-6 mb-6">
-                <div class="flex items-start">
-                    <svg class="w-6 h-6 text-yellow-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div id="no-data" class="hidden card" style="border-color: var(--accent-warning);">
+                <div class="flex items-start gap-3">
+                    <svg class="w-5 h-5 flex-shrink-0" style="color: var(--accent-warning);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     <div>
-                        <h3 class="text-lg font-semibold text-yellow-300 mb-2">No Data Available</h3>
-                        <p class="text-slate-300">This job has no scraped data available. This could mean:</p>
-                        <ul class="list-disc list-inside mt-2 text-slate-400 space-y-1">
+                        <h3 class="font-semibold mb-2" style="color: var(--accent-warning);">No Data Available</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 0.5rem;">This job has no scraped data available. This could mean:</p>
+                        <ul style="color: var(--text-secondary); font-size: 0.875rem; list-style: disc; padding-left: 1.5rem; line-height: 1.8;">
                             <li>The data has expired (TTL: 24 hours after completion)</li>
                             <li>The job is still running</li>
                             <li>The job failed to scrape any pages</li>
@@ -147,19 +213,17 @@
 
         function createPageCard(page, index) {
             const card = document.createElement('div');
-            card.className = 'bg-slate-800/50 rounded-lg p-6 mb-4 border border-slate-700/50';
+            card.className = 'card';
 
             const header = document.createElement('div');
-            header.className = 'flex justify-between items-start mb-4';
+            header.className = 'mb-4';
             header.innerHTML = `
-                <div class="flex-1">
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="text-xs font-mono px-2 py-1 rounded bg-blue-500/20 text-blue-300">Page ${index + 1}</span>
-                        ${page.metadata?.statusCode ? `<span class="text-xs font-mono px-2 py-1 rounded ${page.metadata.statusCode === 200 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}">${page.metadata.statusCode}</span>` : ''}
-                    </div>
-                    <a href="${page.metadata?.sourceURL || page.url || '#'}" target="_blank" class="text-blue-400 hover:text-blue-300 font-medium break-all">${page.metadata?.sourceURL || page.url || 'Unknown URL'}</a>
-                    ${page.metadata?.title ? `<p class="text-slate-300 mt-1">${page.metadata.title}</p>` : ''}
+                <div class="flex items-center gap-2 mb-2">
+                    <span style="font-size: 0.75rem; font-weight: 600; color: var(--accent-blue);">Page ${index + 1}</span>
+                    ${page.metadata?.statusCode ? `<span style="font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 4px; font-family: monospace; background: ${page.metadata.statusCode === 200 ? 'var(--bg-secondary)' : '#fee2e2'}; color: ${page.metadata.statusCode === 200 ? 'var(--accent-success)' : 'var(--accent-error)'};">${page.metadata.statusCode}</span>` : ''}
                 </div>
+                <a href="${page.metadata?.sourceURL || page.url || '#'}" target="_blank" style="color: var(--accent-blue); text-decoration: none; font-weight: 500; word-break: break-all; display: block; margin-bottom: 0.5rem;">${page.metadata?.sourceURL || page.url || 'Unknown URL'}</a>
+                ${page.metadata?.title ? `<p style="color: var(--text-secondary); font-size: 0.875rem;">${page.metadata.title}</p>` : ''}
             `;
 
             const content = document.createElement('div');
@@ -167,7 +231,10 @@
 
             // Tabs for different content types
             const tabs = document.createElement('div');
-            tabs.className = 'flex gap-2 mb-4 border-b border-slate-700';
+            tabs.style.display = 'flex';
+            tabs.style.gap = '0.5rem';
+            tabs.style.marginBottom = '1rem';
+            tabs.style.borderBottom = '1px solid var(--border-color)';
 
             const availableTabs = [];
             if (page.markdown) availableTabs.push({ name: 'markdown', label: 'Markdown' });
@@ -177,7 +244,7 @@
 
             availableTabs.forEach((tab, tabIndex) => {
                 const tabBtn = document.createElement('button');
-                tabBtn.className = `px-4 py-2 text-sm font-medium ${tabIndex === 0 ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-400 hover:text-slate-300'}`;
+                tabBtn.className = tabIndex === 0 ? 'tab-button active' : 'tab-button';
                 tabBtn.textContent = tab.label;
                 tabBtn.onclick = () => showTabContent(index, tab.name, tabBtn);
                 tabs.appendChild(tabBtn);
@@ -185,7 +252,6 @@
 
             const tabContent = document.createElement('div');
             tabContent.id = `tab-content-${index}`;
-            tabContent.className = 'markdown-content';
 
             if (availableTabs.length > 0) {
                 showInitialTabContent(tabContent, page, availableTabs[0].name);
@@ -202,7 +268,7 @@
         function showInitialTabContent(container, page, tabName) {
             container.innerHTML = '';
             const contentDiv = document.createElement('div');
-            contentDiv.className = 'bg-slate-900/50 rounded p-4 text-sm font-mono whitespace-pre-wrap overflow-x-auto';
+            contentDiv.className = 'content-area';
 
             if (tabName === 'markdown') {
                 contentDiv.textContent = page.markdown || 'No markdown content';
@@ -211,13 +277,13 @@
             } else if (tabName === 'rawHtml') {
                 contentDiv.textContent = page.rawHtml || 'No raw HTML content';
             } else if (tabName === 'links' && page.links) {
-                contentDiv.className = 'space-y-2';
+                contentDiv.style.fontFamily = 'inherit';
                 contentDiv.innerHTML = page.links.map(link =>
-                    `<div class="flex items-center gap-2">
-                        <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    `<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <svg style="width: 1rem; height: 1rem; color: var(--text-secondary); flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
                         </svg>
-                        <a href="${link}" target="_blank" class="text-blue-400 hover:text-blue-300 break-all">${link}</a>
+                        <a href="${link}" target="_blank" style="color: var(--accent-blue); text-decoration: none; word-break: break-all;">${link}</a>
                     </div>`
                 ).join('');
             }
@@ -229,9 +295,9 @@
             // Update tab styles
             const tabs = clickedTab.parentElement.children;
             Array.from(tabs).forEach(tab => {
-                tab.className = 'px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-300';
+                tab.className = 'tab-button';
             });
-            clickedTab.className = 'px-4 py-2 text-sm font-medium text-blue-400 border-b-2 border-blue-400';
+            clickedTab.className = 'tab-button active';
 
             // Note: In a full implementation, you'd need to store the page data and update the content
             // For now, this just updates the tab styling
