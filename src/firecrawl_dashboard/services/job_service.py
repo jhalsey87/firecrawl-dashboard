@@ -13,7 +13,7 @@ from ..config import settings
 
 class JobService:
     """Service for enhanced job tracking and management"""
-    
+
     def __init__(self, redis_service: RedisService):
         self.redis_service = redis_service
         self.active_jobs: Dict[str, DetailedJob] = {}
@@ -69,17 +69,52 @@ class JobService:
             for job_id in crawl_job_ids[:20]:  # Limit to 20 jobs to avoid overwhelming
                 job_details = await self.get_job_details_enhanced(job_id)
                 if job_details:
+                    # Get origin URL and creation timestamp from Redis
+                    origin_url = await self.redis_service.get_crawl_origin_url(job_id)
+                    if origin_url:
+                        job_details["origin_url"] = origin_url
+
+                    # Get actual creation timestamp from Redis (overrides API timestamp if available)
+                    redis_created_at = await self.redis_service.get_crawl_created_at(job_id)
+                    if redis_created_at:
+                        job_details["created_at"] = redis_created_at
+
+                    # Get actual completion timestamp from Redis (timestamp of last scraped page)
+                    redis_completed_at = await self.redis_service.get_crawl_completed_at(job_id)
+                    if redis_completed_at:
+                        job_details["completed_at"] = redis_completed_at
+
                     # Convert status to JobStatus enum, fallback to UNKNOWN if invalid
                     try:
                         job_status = JobStatus(job_details.get("status", "unknown"))
                     except ValueError:
                         job_status = JobStatus.UNKNOWN
 
+                    # Parse created_at timestamp
+                    created_at_str = job_details.get("created_at")
+                    created_at_dt = None
+                    if created_at_str:
+                        try:
+                            created_at_dt = datetime.fromisoformat(created_at_str)
+                        except:
+                            pass
+
+                    # Parse completed_at timestamp
+                    completed_at_str = job_details.get("completed_at")
+                    completed_at_dt = None
+                    if completed_at_str:
+                        try:
+                            completed_at_dt = datetime.fromisoformat(completed_at_str)
+                        except:
+                            pass
+
                     # Convert to DetailedJob object
                     crawl_job = DetailedJob(
                         job_id=job_id,
                         status=job_status,
                         job_type=JobType.CRAWL,
+                        created_at=created_at_dt,
+                        completed_at=completed_at_dt,
                         total_urls=job_details.get("total_urls", job_details.get("total", 0)),
                         completed_urls=job_details.get("completed_urls", job_details.get("completed", 0)),
                         source="firecrawl"
@@ -119,13 +154,15 @@ class JobService:
         """Start a new crawl job"""
         if not urls:
             raise ValueError("No valid URLs provided")
-        
+
         # Create enhanced job
         job = self.create_job(job_type, urls)
         job.metadata["limit"] = limit
         job.metadata["urls"] = urls
+        job.metadata["origin_url"] = urls[0] if urls else None  # Store the first URL as origin
+        job.metadata["api_version"] = "v2"  # Dashboard uses v2 API for job creation
         job.status = JobStatus.WAITING
-        
+
         return job
     
     def cancel_job(self, job_id: str) -> bool:
@@ -155,12 +192,24 @@ class JobService:
                     headers = {"Authorization": f"Bearer {settings.firecrawl_api_key}"} if settings.firecrawl_api_key and settings.firecrawl_api_key != "dummy" else {}
                     
                     # Try different endpoints to get job status (v2 first, then v1, v0)
+                    api_version_used = None
                     for endpoint in [f"/v2/crawl/{job_id}", f"/v1/crawl/{job_id}", f"/v0/crawl/{job_id}", f"/crawl/{job_id}"]:
                         try:
                             async with session.get(f"{settings.firecrawl_api_url}{endpoint}", headers=headers, timeout=10) as response:
                                 if response.status == 200:
                                     firecrawl_job = await response.json()
+                                    # Determine which API version was used
+                                    if "/v2/" in endpoint:
+                                        api_version_used = "v2"
+                                    elif "/v1/" in endpoint:
+                                        api_version_used = "v1"
+                                    elif "/v0/" in endpoint:
+                                        api_version_used = "v0"
+                                    else:
+                                        api_version_used = "unknown"
+
                                     # Convert Firecrawl job format to dashboard format
+                                    # Note: created_at and completed_at will be set from Redis in get_enhanced_jobs()
                                     job_data = {
                                         "job_id": job_id,
                                         "status": firecrawl_job.get("status", "unknown"),
@@ -168,10 +217,12 @@ class JobService:
                                         "total_urls": firecrawl_job.get("total", 0),
                                         "completed_urls": firecrawl_job.get("completed", 0),
                                         "created_at": firecrawl_job.get("created_at", datetime.utcnow().isoformat()),
+                                        "completed_at": None,  # Will be set from Redis if available
                                         "errors": firecrawl_job.get("errors", []),
                                         "source": "firecrawl",
                                         "current_url": firecrawl_job.get("current_url"),
-                                        "last_activity": firecrawl_job.get("updated_at", datetime.utcnow().isoformat())
+                                        "last_activity": firecrawl_job.get("updated_at", datetime.utcnow().isoformat()),
+                                        "api_version": api_version_used
                                     }
                                     break
                         except:
@@ -181,7 +232,19 @@ class JobService:
         
         if not job_data:
             return None
-        
+
+        # If this is a Firecrawl job, fetch accurate timestamps from Redis
+        if job_data.get("source") == "firecrawl":
+            # Get actual creation timestamp from Redis
+            redis_created_at = await self.redis_service.get_crawl_created_at(job_id)
+            if redis_created_at:
+                job_data["created_at"] = redis_created_at
+
+            # Get actual completion timestamp from Redis (timestamp of last scraped page)
+            redis_completed_at = await self.redis_service.get_crawl_completed_at(job_id)
+            if redis_completed_at:
+                job_data["completed_at"] = redis_completed_at
+
         # Calculate additional metrics
         total_time = None
         if job_data.get("started_at") and job_data.get("status") in ["running", "queued", "active", "processing"]:

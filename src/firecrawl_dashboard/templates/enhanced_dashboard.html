@@ -249,10 +249,10 @@
             try {
                 const response = await fetch('/api/jobs');
                 const data = await response.json();
-                
+
                 updateActiveJobsList(data.active_jobs || []);
                 updateRecentJobsList(data.recent_jobs || []);
-                
+
                 // Update badges
                 document.getElementById('active-jobs-badge').textContent = `${data.active_jobs?.length || 0} running`;
                 document.getElementById('recent-jobs-badge').textContent = `${data.recent_jobs?.length || 0} completed`;
@@ -329,6 +329,20 @@
                     
                     <div class="expandable-content" id="expansion-${job.job_id}">
                         <div class="border-t border-slate-600/30 pt-3 mt-3 space-y-2">
+                            ${job.metadata?.origin_url ? `
+                                <div class="job-detail-row">
+                                    <span class="text-slate-400">Origin URL:</span>
+                                    <span class="text-slate-300 truncate" title="${job.metadata.origin_url}">${job.metadata.origin_url}</span>
+                                </div>
+                            ` : ''}
+                            ${job.metadata?.api_version ? `
+                                <div class="job-detail-row">
+                                    <span class="text-slate-400">API Version:</span>
+                                    <span class="text-slate-300">
+                                        <span class="px-2 py-1 rounded text-xs font-mono ${job.metadata.api_version === 'v2' ? 'bg-green-500/20 text-green-300' : job.metadata.api_version === 'v1' ? 'bg-blue-500/20 text-blue-300' : 'bg-yellow-500/20 text-yellow-300'}">${job.metadata.api_version}</span>
+                                    </span>
+                                </div>
+                            ` : ''}
                             <div class="job-detail-row">
                                 <span class="text-slate-400">Status:</span>
                                 <span class="text-slate-300">${job.status}</span>

@@ -12,19 +12,38 @@ from ..config import settings
 
 class JobProcessingService:
     """Service for processing crawl and scrape jobs in the background"""
-    
-    def __init__(self, active_jobs: Dict[str, Dict[str, Any]]):
+
+    def __init__(self, active_jobs: Dict[str, Dict[str, Any]], job_service=None):
         self.active_jobs = active_jobs
+        self.job_service = job_service
     
     async def process_crawl_job(self, job_id: str):
         """Background task to process a crawl job"""
+        print(f"🚀 BACKGROUND TASK STARTED for job {job_id}")
+        print(f"📊 Active jobs in processing service: {list(self.active_jobs.keys())}")
+
         try:
             if job_id not in self.active_jobs:
+                print(f"❌ Job {job_id} NOT FOUND in active jobs!")
+                print(f"   Available jobs: {list(self.active_jobs.keys())}")
                 raise ValueError(f"Job {job_id} not found in active jobs")
-            
+
+            print(f"✅ Job {job_id} found, setting to 'running' status")
             job_data = self.active_jobs[job_id]
             job_data["status"] = "running"
             job_data["started_at"] = datetime.utcnow().isoformat()
+
+            # Also update JobService if available
+            if self.job_service:
+                from ..models import JobStatus
+                self.job_service.update_job_status(
+                    job_id,
+                    JobStatus.RUNNING,
+                    started_at=datetime.utcnow()
+                )
+                print(f"✅ Updated JobService status for {job_id} to RUNNING")
+
+            print(f"🏃 Job {job_id} now running with {len(job_data.get('urls', []))} URLs to process")
             
             async with aiohttp.ClientSession() as session:
                 headers = settings.firecrawl_headers
@@ -72,10 +91,18 @@ class JobProcessingService:
             await self._finalize_job(job_id)
             
         except Exception as e:
+            print(f"💥 EXCEPTION in background task for job {job_id}: {e}")
+            print(f"   Exception type: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
+
             # Mark job as failed
-            self.active_jobs[job_id]["status"] = "failed"
-            self.active_jobs[job_id]["error"] = str(e)
-            self.active_jobs[job_id]["failed_at"] = datetime.utcnow().isoformat()
+            if job_id in self.active_jobs:
+                self.active_jobs[job_id]["status"] = "failed"
+                self.active_jobs[job_id]["error"] = str(e)
+                self.active_jobs[job_id]["failed_at"] = datetime.utcnow().isoformat()
+            else:
+                print(f"⚠️ Cannot mark job {job_id} as failed - not in active_jobs")
     
     async def _process_scrape_url(self, session: aiohttp.ClientSession, headers: Dict[str, str], 
                                   url: str, start_time: datetime) -> Dict[str, Any]:
@@ -171,11 +198,29 @@ class JobProcessingService:
     async def _finalize_job(self, job_id: str):
         """Finalize job status based on results"""
         job_data = self.active_jobs[job_id]
-        
+
         if job_data["status"] != "cancelled":
             if len(job_data["errors"]) == 0:
                 job_data["status"] = "completed"
             else:
                 job_data["status"] = "completed_with_errors" if job_data["completed_urls"] > 0 else "failed"
-        
+
         job_data["completed_at"] = datetime.utcnow().isoformat()
+
+        # Also update JobService if available
+        if self.job_service:
+            from ..models import JobStatus
+            status_map = {
+                "completed": JobStatus.COMPLETED,
+                "completed_with_errors": JobStatus.COMPLETED,
+                "failed": JobStatus.FAILED,
+                "cancelled": JobStatus.CANCELLED
+            }
+            final_status = status_map.get(job_data["status"], JobStatus.COMPLETED)
+            self.job_service.update_job_status(
+                job_id,
+                final_status,
+                completed_at=datetime.utcnow(),
+                completed_urls=job_data.get("completed_urls", 0)
+            )
+            print(f"✅ Updated JobService status for {job_id} to {final_status.value}")

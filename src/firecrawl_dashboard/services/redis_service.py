@@ -106,6 +106,82 @@ class RedisService:
             print(f"Error getting active crawl jobs: {e}")
             return []
 
+    async def get_crawl_origin_url(self, job_id: str) -> Optional[str]:
+        """Get the origin URL for a crawl job from Redis"""
+        try:
+            client = await self.get_client()
+            if not client:
+                return None
+
+            # Get crawl data from Redis
+            crawl_data = await client.get(f"crawl:{job_id}")
+            if crawl_data:
+                import json
+                data = json.loads(crawl_data)
+                return data.get("originUrl")
+            return None
+        except Exception as e:
+            print(f"Error getting origin URL for job {job_id}: {e}")
+            return None
+
+    async def get_crawl_created_at(self, job_id: str) -> Optional[str]:
+        """Get the creation timestamp for a crawl job from Redis"""
+        try:
+            client = await self.get_client()
+            if not client:
+                return None
+
+            # Get crawl data from Redis
+            crawl_data = await client.get(f"crawl:{job_id}")
+            if crawl_data:
+                import json
+                data = json.loads(crawl_data)
+                # Redis crawl data has createdAt as Unix timestamp in milliseconds
+                created_at_ms = data.get("createdAt")
+                if created_at_ms:
+                    # Convert milliseconds to seconds and create ISO timestamp
+                    from datetime import datetime
+                    created_dt = datetime.fromtimestamp(created_at_ms / 1000.0)
+                    return created_dt.isoformat()
+            return None
+        except Exception as e:
+            print(f"Error getting creation timestamp for job {job_id}: {e}")
+            return None
+
+    async def get_crawl_completed_at(self, job_id: str) -> Optional[str]:
+        """Get the completion timestamp for a crawl job from Redis
+
+        This retrieves the timestamp of the last scraped page from the sorted set
+        crawl:{job_id}:jobs_donez_ordered, which tracks all scraped pages with timestamps.
+        """
+        try:
+            client = await self.get_client()
+            if not client:
+                return None
+
+            # Get the last entry from the sorted set (highest score = most recent timestamp)
+            # ZRANGE with -1 -1 gets the last element, WITHSCORES includes the timestamp
+            result = await client.zrange(
+                f"crawl:{job_id}:jobs_donez_ordered",
+                -1, -1,
+                withscores=True
+            )
+
+            if result and len(result) > 0:
+                # Result is a list of tuples: [(member, score), ...]
+                # The score is the Unix timestamp in milliseconds
+                last_page_timestamp_ms = result[0][1]  # Get the score (timestamp)
+
+                # Convert milliseconds to seconds and create ISO timestamp
+                from datetime import datetime
+                completed_dt = datetime.fromtimestamp(last_page_timestamp_ms / 1000.0)
+                return completed_dt.isoformat()
+
+            return None
+        except Exception as e:
+            print(f"Error getting completion timestamp for job {job_id}: {e}")
+            return None
+
     async def clear_all_queues(self) -> Dict[str, Any]:
         """Emergency: Clear all Redis queues"""
         try:

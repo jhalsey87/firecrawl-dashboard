@@ -34,7 +34,7 @@ job_counter = 0
 redis_service = RedisService()
 health_service = HealthService()
 job_service = JobService(redis_service)
-job_processing_service = JobProcessingService(active_jobs)
+job_processing_service = JobProcessingService(active_jobs, job_service)
 metrics_service = MetricsService(active_jobs)
 
 # Initialize FastAPI app
@@ -112,27 +112,27 @@ async def get_jobs():
     try:
         # Get enhanced jobs from JobService
         enhanced_jobs = await job_service.get_enhanced_jobs()
-        
+
         # Convert to legacy format for backward compatibility
         jobs_data = [job.to_dict() for job in enhanced_jobs]
-        
+
         # Separate active and recent jobs
         active_jobs_list = []
         recent_jobs_list = []
-        
+
         for job in jobs_data:
-            if job.get("status") in ["running", "queued", "active", "processing", "waiting"]:
+            if job.get("status") in ["running", "queued", "active", "processing", "waiting", "scraping"]:
                 active_jobs_list.append(job)
             else:
                 recent_jobs_list.append(job)
-        
-        # Sort by creation time
+
+        # Sort by creation time (newest first)
         active_jobs_list.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         recent_jobs_list.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-        
+
         return {
-            "active_jobs": active_jobs_list[:20],
-            "recent_jobs": recent_jobs_list[:20],
+            "active_jobs": active_jobs_list[:50],  # Increased from 20 to show more jobs
+            "recent_jobs": recent_jobs_list[:50],  # Increased from 20 to show more jobs
             "queue_count": len([j for j in jobs_data if j.get("source") == "redis_queue"]),
             "dashboard_count": len([j for j in jobs_data if j.get("source") == "dashboard"]),
             "firecrawl_count": 0  # Can be enhanced later
@@ -183,9 +183,30 @@ async def start_crawl_job(
         
         # Create job using JobService
         job = job_service.start_crawl_job(url_list, job_type, limit)
-        
+        print(f"📝 Created job {job.job_id} with JobService")
+
+        # Also add to global active_jobs for job_processing_service
+        active_jobs[job.job_id] = {
+            "job_id": job.job_id,
+            "status": job.status.value,
+            "job_type": job.job_type.value,
+            "urls": url_list,
+            "limit": limit,
+            "created_at": job.created_at.isoformat(),
+            "started_at": None,
+            "completed_at": None,
+            "completed_urls": 0,
+            "total_urls": len(url_list),
+            "errors": [],
+            "processed_urls": []
+        }
+        print(f"📊 Added job {job.job_id} to global active_jobs dictionary")
+        print(f"   Active jobs now: {list(active_jobs.keys())}")
+
         # Start background processing task
-        asyncio.create_task(job_processing_service.process_crawl_job(job.job_id))
+        print(f"🎬 Starting background task for job {job.job_id}")
+        task = asyncio.create_task(job_processing_service.process_crawl_job(job.job_id))
+        print(f"✅ Background task created: {task}")
         
         return {
             "success": True,
