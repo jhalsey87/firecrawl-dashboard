@@ -6,17 +6,41 @@
     <title>Firecrawl Monitor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* Skip to main content link for keyboard users */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--accent-blue);
+            color: white;
+            padding: 8px;
+            text-decoration: none;
+            z-index: 100;
+        }
+
+        .skip-link:focus {
+            top: 0;
+        }
+
+        /* Visible focus indicators for keyboard navigation */
+        button:focus-visible,
+        select:focus-visible,
+        input:focus-visible,
+        a:focus-visible {
+            outline: 2px solid var(--accent-blue);
+            outline-offset: 2px;
+        }
         /* Reduce visual noise - clean color palette */
         :root {
             --bg-primary: #ffffff;
             --bg-secondary: #f8fafc;
             --text-primary: #1e293b;
-            --text-secondary: #64748b;
+            --text-secondary: #475569; /* Darkened for better contrast (was #64748b) */
             --border-color: #e2e8f0;
-            --accent-blue: #3b82f6;
-            --accent-success: #10b981;
-            --accent-warning: #f59e0b;
-            --accent-error: #ef4444;
+            --accent-blue: #2563eb; /* Darkened for better contrast (was #3b82f6) */
+            --accent-success: #059669; /* Darkened for better contrast (was #10b981) */
+            --accent-warning: #d97706; /* Darkened for better contrast (was #f59e0b) */
+            --accent-error: #dc2626; /* Darkened for better contrast (was #ef4444) */
         }
 
         body {
@@ -111,21 +135,52 @@
             from { opacity: 0; }
             to { opacity: 1; }
         }
+
+        /* Screen reader only content */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
     </style>
 </head>
 <body>
+    <!-- Skip to main content link for keyboard users -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <!-- Live region for screen reader announcements -->
+    <div aria-live="polite" aria-atomic="true" class="sr-only" id="status-announcements"></div>
+
     <div class="max-w-7xl mx-auto p-6">
         <!-- Simple header - no gradients or excessive styling -->
-        <div class="mb-8 flex justify-between items-start">
+        <header class="mb-8 flex justify-between items-start">
             <div>
                 <h1 class="text-2xl font-bold mb-1" style="color: var(--text-primary)">Firecrawl Monitor</h1>
                 <p class="text-sm" style="color: var(--text-secondary)">Real-time crawl job tracking</p>
             </div>
-            <div class="flex gap-3">
-                <button onclick="toggleAutoRefresh()" id="refresh-toggle" class="px-3 py-1.5 text-sm border rounded-md" style="border-color: var(--border-color); color: var(--text-secondary)">
-                    <span id="refresh-icon">⏸</span> <span id="refresh-text">Pause</span>
+            <div class="flex gap-3" role="group" aria-label="Dashboard controls">
+                <button
+                    onclick="toggleAutoRefresh()"
+                    id="refresh-toggle"
+                    class="px-3 py-1.5 text-sm border rounded-md"
+                    style="border-color: var(--border-color); color: var(--text-secondary)"
+                    aria-label="Toggle auto-refresh"
+                    aria-pressed="true">
+                    <span aria-hidden="true" id="refresh-icon">⏸</span> <span id="refresh-text">Pause</span>
                 </button>
-                <select id="refresh-interval" onchange="updateRefreshInterval()" class="px-3 py-1.5 text-sm border rounded-md" style="border-color: var(--border-color); color: var(--text-secondary)">
+                <label for="refresh-interval" class="sr-only">Refresh interval</label>
+                <select
+                    id="refresh-interval"
+                    onchange="updateRefreshInterval()"
+                    class="px-3 py-1.5 text-sm border rounded-md"
+                    style="border-color: var(--border-color); color: var(--text-secondary)"
+                    aria-label="Select refresh interval">
                     <option value="3">3s</option>
                     <option value="5" selected>5s</option>
                     <option value="10">10s</option>
@@ -133,85 +188,99 @@
                     <option value="60">60s</option>
                 </select>
             </div>
-        </div>
+        </header>
 
         <!-- Key metrics - direct attention with size and placement -->
-        <div class="grid grid-cols-4 gap-6 mb-8">
-            <div class="card">
-                <div class="flex justify-between items-start mb-2">
-                    <div class="metric-label">Health</div>
-                    <button onclick="checkHealth()" class="text-xs px-2 py-0.5 border rounded" style="border-color: var(--border-color); color: var(--text-secondary)">
-                        Test
-                    </button>
+        <main id="main-content">
+            <section class="grid grid-cols-4 gap-6 mb-8" role="region" aria-label="Key metrics">
+                <div class="card">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="metric-label">Health</div>
+                        <button
+                            onclick="checkHealth()"
+                            class="text-xs px-2 py-0.5 border rounded"
+                            style="border-color: var(--border-color); color: var(--text-secondary)"
+                            aria-label="Test health status">
+                            Test
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div
+                            id="health-indicator"
+                            class="w-2 h-2 rounded-full"
+                            style="background: #d1d5db"
+                            role="status"
+                            aria-label="Health status indicator"></div>
+                        <div class="font-semibold" id="health-status" style="color: var(--text-primary)" aria-live="polite">—</div>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <div id="health-indicator" class="w-2 h-2 rounded-full" style="background: #d1d5db"></div>
-                    <div class="font-semibold" id="health-status" style="color: var(--text-primary)">—</div>
-                </div>
-            </div>
             <div class="card">
-                <div class="metric-value status-active" id="active-count">0</div>
+                <div class="metric-value status-active" id="active-count" aria-label="Active jobs count" role="status">0</div>
                 <div class="metric-label">Active Jobs</div>
             </div>
             <div class="card">
-                <div class="metric-value" style="color: var(--text-primary)" id="completed-count">0</div>
+                <div class="metric-value" style="color: var(--text-primary)" id="completed-count" aria-label="Completed jobs today" role="status">0</div>
                 <div class="metric-label">Completed Today</div>
             </div>
             <div class="card">
-                <div class="metric-value" style="color: var(--text-secondary)" id="success-rate">—</div>
+                <div class="metric-value" style="color: var(--text-secondary)" id="success-rate" aria-label="Success rate" role="status">—</div>
                 <div class="metric-label">Success Rate</div>
             </div>
-        </div>
+        </section>
 
         <!-- Active Jobs Section -->
-        <div class="card mb-6" id="active-section">
+        <section class="card mb-6" id="active-section" aria-labelledby="active-jobs-heading">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-semibold">Active Jobs</h2>
-                <button onclick="refreshJobs()" class="action-link">Refresh</button>
+                <h2 id="active-jobs-heading" class="text-lg font-semibold">Active Jobs</h2>
+                <button onclick="refreshJobs()" class="action-link" aria-label="Refresh job list">Refresh</button>
             </div>
-            <div id="active-jobs">
+            <div id="active-jobs" role="region" aria-live="polite" aria-label="Active jobs list">
                 <div class="text-center py-8" style="color: var(--text-secondary)">
                     Loading...
                 </div>
             </div>
-        </div>
+        </section>
 
         <!-- Recent Jobs Section -->
-        <div class="card">
-            <h2 class="text-lg font-semibold mb-4">Recent Jobs</h2>
-            <div id="recent-jobs">
+        <section class="card" aria-labelledby="recent-jobs-heading">
+            <h2 id="recent-jobs-heading" class="text-lg font-semibold mb-4">Recent Jobs</h2>
+            <div id="recent-jobs" role="region" aria-live="polite" aria-label="Recent jobs list">
                 <div class="text-center py-8" style="color: var(--text-secondary)">
                     Loading...
                 </div>
             </div>
-        </div>
+        </section>
 
         <!-- Simple new job form -->
-        <div class="card mt-6">
-            <h2 class="text-lg font-semibold mb-4">Start New Crawl</h2>
-            <form onsubmit="startJob(event)" class="space-y-4">
+        <section class="card mt-6" aria-labelledby="start-crawl-heading">
+            <h2 id="start-crawl-heading" class="text-lg font-semibold mb-4">Start New Crawl</h2>
+            <form onsubmit="startJob(event)" class="space-y-4" aria-label="Start new crawl job">
                 <div>
-                    <label class="block text-sm font-medium mb-2" style="color: var(--text-primary)">URL</label>
+                    <label for="crawl-url" class="block text-sm font-medium mb-2" style="color: var(--text-primary)">URL</label>
                     <input
-                        type="text"
+                        type="url"
                         id="crawl-url"
+                        name="crawl-url"
                         placeholder="https://example.com"
                         class="w-full px-3 py-2 border rounded-md"
                         style="border-color: var(--border-color)"
+                        aria-required="true"
                         required
                     >
                 </div>
                 <div class="flex gap-4">
                     <div class="flex-1">
-                        <label class="block text-sm font-medium mb-2" style="color: var(--text-primary)">Max Pages</label>
+                        <label for="crawl-limit" class="block text-sm font-medium mb-2" style="color: var(--text-primary)">Max Pages</label>
                         <input
                             type="number"
                             id="crawl-limit"
+                            name="crawl-limit"
                             value="10"
                             min="1"
                             max="100"
                             class="w-full px-3 py-2 border rounded-md"
                             style="border-color: var(--border-color)"
+                            aria-label="Maximum pages to crawl"
                         >
                     </div>
                     <div class="flex items-end">
@@ -219,13 +288,14 @@
                             type="submit"
                             class="px-6 py-2 rounded-md text-white font-medium"
                             style="background: var(--accent-blue)"
-                        >
+                            aria-label="Start crawl job">
                             Start Crawl
                         </button>
                     </div>
                 </div>
             </form>
-        </div>
+        </section>
+        </main>
     </div>
 
     <script>
@@ -245,14 +315,17 @@
                     indicator.style.background = 'var(--accent-success)';
                     status.textContent = 'Healthy';
                     status.style.color = 'var(--accent-success)';
+                    announce('Health check complete: System is healthy');
                 } else if (data.overall_status === 'error') {
                     indicator.style.background = 'var(--accent-error)';
                     status.textContent = 'Error';
                     status.style.color = 'var(--accent-error)';
+                    announce('Health check complete: System has errors');
                 } else {
                     indicator.style.background = 'var(--accent-warning)';
                     status.textContent = 'Warning';
                     status.style.color = 'var(--accent-warning)';
+                    announce('Health check complete: System has warnings');
                 }
             } catch (error) {
                 const indicator = document.getElementById('health-indicator');
@@ -260,7 +333,14 @@
                 indicator.style.background = 'var(--accent-error)';
                 status.textContent = 'Offline';
                 status.style.color = 'var(--accent-error)';
+                announce('Health check failed: System is offline');
             }
+        }
+
+        function announce(message) {
+            const announcements = document.getElementById('status-announcements');
+            announcements.textContent = message;
+            setTimeout(() => { announcements.textContent = ''; }, 1000);
         }
 
         function toggleAutoRefresh() {
@@ -274,12 +354,16 @@
                 icon.textContent = '⏸';
                 text.textContent = 'Pause';
                 button.style.color = 'var(--text-secondary)';
+                button.setAttribute('aria-pressed', 'true');
                 startAutoRefresh();
+                announce('Auto-refresh enabled');
             } else {
                 icon.textContent = '▶';
                 text.textContent = 'Resume';
                 button.style.color = 'var(--accent-blue)';
+                button.setAttribute('aria-pressed', 'false');
                 stopAutoRefresh();
+                announce('Auto-refresh paused');
             }
         }
 
@@ -291,6 +375,7 @@
                 stopAutoRefresh();
                 startAutoRefresh();
             }
+            announce(`Refresh interval set to ${currentRefreshSeconds} seconds`);
         }
 
         function startAutoRefresh() {
@@ -311,8 +396,11 @@
                 const data = await response.json();
 
                 // Update metrics
-                document.getElementById('active-count').textContent = data.active_jobs?.length || 0;
-                document.getElementById('completed-count').textContent = data.recent_jobs?.length || 0;
+                const activeCount = data.active_jobs?.length || 0;
+                const completedCount = data.recent_jobs?.length || 0;
+
+                document.getElementById('active-count').textContent = activeCount;
+                document.getElementById('completed-count').textContent = completedCount;
 
                 // Calculate success rate
                 const recentJobs = data.recent_jobs || [];
@@ -328,6 +416,7 @@
 
             } catch (error) {
                 console.error('Failed to refresh jobs:', error);
+                announce('Failed to refresh jobs');
             }
         }
 
@@ -362,7 +451,7 @@
                             Running
                         </div>
                         <div>
-                            <button onclick="cancelJob('${job.job_id}')" class="action-link" style="color: var(--accent-error)">
+                            <button onclick="cancelJob('${job.job_id}')" class="action-link" style="color: var(--accent-error)" aria-label="Cancel job ${job.job_id}">
                                 Cancel
                             </button>
                         </div>
@@ -400,8 +489,8 @@
                         </div>
                         <div>
                             ${job.source === 'firecrawl' || job.job_type === 'crawl' ?
-                                `<a href="/jobs/${job.job_id}/data" class="action-link">View Data</a>` :
-                                '<span style="color: var(--text-secondary)">—</span>'
+                                `<a href="/jobs/${job.job_id}/data" class="action-link" aria-label="View scraped data for job ${job.job_id}">View Data</a>` :
+                                '<span style="color: var(--text-secondary)" aria-hidden="true">—</span>'
                             }
                         </div>
                     </div>
@@ -445,11 +534,16 @@
                 });
 
                 if (response.ok) {
+                    const data = await response.json();
                     document.getElementById('crawl-url').value = '';
+                    announce(`Crawl job started for ${truncateUrl(url, 30)}`);
                     setTimeout(() => refreshJobs(), 1000);
+                } else {
+                    announce('Failed to start crawl job');
                 }
             } catch (error) {
                 console.error('Failed to start job:', error);
+                announce('Failed to start crawl job');
             }
         }
 
@@ -457,10 +551,16 @@
             if (!confirm('Cancel this job?')) return;
 
             try {
-                await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
-                setTimeout(() => refreshJobs(), 500);
+                const response = await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
+                if (response.ok) {
+                    announce('Job cancelled successfully');
+                    setTimeout(() => refreshJobs(), 500);
+                } else {
+                    announce('Failed to cancel job');
+                }
             } catch (error) {
                 console.error('Failed to cancel job:', error);
+                announce('Failed to cancel job');
             }
         }
 

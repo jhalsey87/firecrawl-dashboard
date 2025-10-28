@@ -6,17 +6,53 @@
     <title>Scraped Data - Job {{ job_id }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Clean color palette matching dashboard */
+        /* Skip to main content link for keyboard users */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--accent-blue);
+            color: white;
+            padding: 8px;
+            text-decoration: none;
+            z-index: 100;
+        }
+
+        .skip-link:focus {
+            top: 0;
+        }
+
+        /* Visible focus indicators for keyboard navigation */
+        button:focus-visible,
+        a:focus-visible {
+            outline: 2px solid var(--accent-blue);
+            outline-offset: 2px;
+        }
+
+        /* Screen reader only content */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        /* Clean color palette matching dashboard (WCAG compliant) */
         :root {
             --bg-primary: #ffffff;
             --bg-secondary: #f8fafc;
             --text-primary: #1e293b;
-            --text-secondary: #64748b;
+            --text-secondary: #475569; /* Darkened for better contrast */
             --border-color: #e2e8f0;
-            --accent-blue: #3b82f6;
-            --accent-success: #10b981;
-            --accent-warning: #f59e0b;
-            --accent-error: #ef4444;
+            --accent-blue: #2563eb; /* Darkened for better contrast */
+            --accent-success: #059669; /* Darkened for better contrast */
+            --accent-warning: #d97706; /* Darkened for better contrast */
+            --accent-error: #dc2626; /* Darkened for better contrast */
         }
 
         body {
@@ -88,28 +124,35 @@
     </style>
 </head>
 <body>
+    <!-- Skip to main content link for keyboard users -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <!-- Live region for screen reader announcements -->
+    <div aria-live="polite" aria-atomic="true" class="sr-only" id="status-announcements"></div>
+
     <div class="max-w-6xl mx-auto p-6">
         <!-- Header -->
-        <div class="mb-6">
-            <a href="/" style="color: var(--accent-blue); text-decoration: none; font-size: 0.875rem; display: inline-block; margin-bottom: 1rem;">
+        <header class="mb-6">
+            <a href="/" style="color: var(--accent-blue); text-decoration: none; font-size: 0.875rem; display: inline-block; margin-bottom: 1rem;" aria-label="Back to Dashboard">
                 ← Back to Dashboard
             </a>
             <h1 class="text-2xl font-bold mb-1">Scraped Data</h1>
             <p style="color: var(--text-secondary); font-size: 0.875rem;">
                 Job ID: <span style="font-family: monospace;">{{ job_id }}</span>
             </p>
-        </div>
+        </header>
 
         <!-- Loading State -->
-        <div id="loading" class="card text-center py-8">
-            <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-b-transparent" style="border-color: var(--accent-blue); border-bottom-color: transparent;"></div>
+        <main id="main-content">
+        <div id="loading" class="card text-center py-8" role="status" aria-label="Loading scraped data">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-b-transparent" style="border-color: var(--accent-blue); border-bottom-color: transparent;" aria-hidden="true"></div>
             <p class="mt-3" style="color: var(--text-secondary)">Loading scraped data...</p>
         </div>
 
         <!-- Error State -->
-        <div id="error" class="hidden card" style="border-color: var(--accent-error);">
+        <div id="error" class="hidden card" style="border-color: var(--accent-error);" role="alert" aria-live="assertive">
             <div class="flex items-start gap-3">
-                <svg class="w-5 h-5 flex-shrink-0" style="color: var(--accent-error);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 flex-shrink-0" style="color: var(--accent-error);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 <div>
@@ -122,26 +165,26 @@
         <!-- Data Display -->
         <div id="data-container" class="hidden">
             <!-- Job Status Info -->
-            <div class="card mb-6">
+            <section class="card mb-6" role="region" aria-label="Job statistics">
                 <div class="stat-grid">
                     <div>
                         <div class="stat-label">Status</div>
-                        <div class="stat-value" id="job-status" style="color: var(--text-primary);">—</div>
+                        <div class="stat-value" id="job-status" style="color: var(--text-primary);" role="status" aria-live="polite">—</div>
                     </div>
                     <div>
                         <div class="stat-label">Total Pages</div>
-                        <div class="stat-value" id="job-total" style="color: var(--text-primary);">0</div>
+                        <div class="stat-value" id="job-total" style="color: var(--text-primary);" role="status">0</div>
                     </div>
                     <div>
                         <div class="stat-label">Completed</div>
-                        <div class="stat-value" id="job-completed" style="color: var(--accent-success);">0</div>
+                        <div class="stat-value" id="job-completed" style="color: var(--accent-success);" role="status">0</div>
                     </div>
                     <div>
                         <div class="stat-label">Data Available</div>
-                        <div class="stat-value" id="data-count" style="color: var(--accent-blue);">0</div>
+                        <div class="stat-value" id="data-count" style="color: var(--accent-blue);" role="status">0</div>
                     </div>
                 </div>
-            </div>
+            </section>
 
             <!-- No Data Message -->
             <div id="no-data" class="hidden card" style="border-color: var(--accent-warning);">
@@ -163,12 +206,19 @@
             </div>
 
             <!-- Scraped Pages -->
-            <div id="pages-container"></div>
+            <section id="pages-container" role="region" aria-label="Scraped pages"></section>
         </div>
+        </main>
     </div>
 
     <script>
         const jobId = "{{ job_id }}";
+
+        function announce(message) {
+            const announcements = document.getElementById('status-announcements');
+            announcements.textContent = message;
+            setTimeout(() => { announcements.textContent = ''; }, 1000);
+        }
 
         async function loadScrapedData() {
             try {
@@ -180,6 +230,7 @@
                 if (!result.success) {
                     document.getElementById('error').classList.remove('hidden');
                     document.getElementById('error-message').textContent = result.message || result.error;
+                    announce('Error loading scraped data');
                     return;
                 }
 
@@ -194,6 +245,7 @@
                 // Show no data message if empty
                 if (!result.data || result.data.length === 0) {
                     document.getElementById('no-data').classList.remove('hidden');
+                    announce('No scraped data available for this job');
                     return;
                 }
 
@@ -204,10 +256,13 @@
                     pagesContainer.appendChild(pageCard);
                 });
 
+                announce(`Loaded ${result.data.length} scraped pages`);
+
             } catch (error) {
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('error').classList.remove('hidden');
                 document.getElementById('error-message').textContent = `Failed to load data: ${error.message}`;
+                announce('Failed to load scraped data');
             }
         }
 
@@ -246,16 +301,24 @@
                 const tabBtn = document.createElement('button');
                 tabBtn.className = tabIndex === 0 ? 'tab-button active' : 'tab-button';
                 tabBtn.textContent = tab.label;
+                tabBtn.setAttribute('aria-label', `View ${tab.label.toLowerCase()} content for page ${index + 1}`);
+                tabBtn.setAttribute('aria-selected', tabIndex === 0 ? 'true' : 'false');
+                tabBtn.setAttribute('role', 'tab');
                 tabBtn.onclick = () => showTabContent(index, tab.name, tabBtn);
                 tabs.appendChild(tabBtn);
             });
 
             const tabContent = document.createElement('div');
             tabContent.id = `tab-content-${index}`;
+            tabContent.setAttribute('role', 'tabpanel');
+            tabContent.setAttribute('aria-label', `Content for page ${index + 1}`);
 
             if (availableTabs.length > 0) {
                 showInitialTabContent(tabContent, page, availableTabs[0].name);
             }
+
+            tabs.setAttribute('role', 'tablist');
+            tabs.setAttribute('aria-label', `Content types for page ${index + 1}`);
 
             content.appendChild(tabs);
             content.appendChild(tabContent);
