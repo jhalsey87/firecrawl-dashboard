@@ -85,7 +85,7 @@ class JobProcessingService:
             "formats": ["markdown", "html"]
         }
         
-        async with session.post(f"{settings.firecrawl_api_url}/v0/scrape", 
+        async with session.post(f"{settings.firecrawl_api_url}/v2/scrape",
                               json=payload, headers=headers, timeout=60) as response:
             url_duration = (datetime.now() - start_time).total_seconds()
             
@@ -132,7 +132,7 @@ class JobProcessingService:
             }
         }
         
-        async with session.post(f"{settings.firecrawl_api_url}/v0/crawl", 
+        async with session.post(f"{settings.firecrawl_api_url}/v2/crawl",
                               json=payload, headers=headers, timeout=300) as response:
             url_duration = (datetime.now() - start_time).total_seconds()
             

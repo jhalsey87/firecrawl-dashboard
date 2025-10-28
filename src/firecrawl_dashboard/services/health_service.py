@@ -113,7 +113,7 @@ class HealthService:
                 start_time = datetime.now()
                 try:
                     test_payload = {"url": "https://httpbin.org/html", "formats": ["markdown"]}
-                    async with session.post(f"{settings.firecrawl_api_url}/v0/scrape", 
+                    async with session.post(f"{settings.firecrawl_api_url}/v2/scrape", 
                                           json=test_payload, headers=headers, timeout=30) as response:
                         response_time = (datetime.now() - start_time).total_seconds() * 1000
                         
