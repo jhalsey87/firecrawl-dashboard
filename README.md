@@ -1,6 +1,6 @@
 # 🕷️ Firecrawl Monitoring Dashboard
-
 > A comprehensive web-based monitoring dashboard for self-hosted Firecrawl instances with enhanced job tracking and real-time monitoring
+> This project was forked from the original firecrawl-dashboard to add support for firecrawl v2 apis, add the ability to view scraped data, and apply principles of "Storytelling with Data" by Wiley to the dashbaord design.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
