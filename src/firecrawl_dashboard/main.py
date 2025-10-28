@@ -58,6 +58,15 @@ async def dashboard_classic(request: Request):
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
+@app.get("/jobs/{job_id}/data", response_class=HTMLResponse)
+async def job_data_viewer(request: Request, job_id: str):
+    """View scraped data for a specific job"""
+    return templates.TemplateResponse("job_data_viewer.html", {
+        "request": request,
+        "job_id": job_id
+    })
+
+
 @app.get("/api/health")
 async def get_health_status():
     """Get current Firecrawl health status using HealthService"""
@@ -152,11 +161,60 @@ async def get_jobs():
 async def get_job_details(job_id: str):
     """Get detailed information about a specific job using JobService"""
     enhanced_job = await job_service.get_job_details_enhanced(job_id)
-    
+
     if not enhanced_job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     return enhanced_job
+
+
+@app.get("/api/jobs/{job_id}/data")
+async def get_job_scraped_data(job_id: str, skip: int = 0, limit: int = 100):
+    """Get scraped data for a crawl job from Firecrawl API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {"Authorization": f"Bearer {FIRECRAWL_API_KEY}"} if FIRECRAWL_API_KEY and FIRECRAWL_API_KEY != "dummy" else {}
+
+            # Try to fetch scraped data from Firecrawl API
+            url = f"{FIRECRAWL_API_URL}/v2/crawl/{job_id}?skip={skip}&limit={limit}"
+            async with session.get(url, headers=headers, timeout=30) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return {
+                        "success": True,
+                        "job_id": job_id,
+                        "status": data.get("status"),
+                        "total": data.get("total", 0),
+                        "completed": data.get("completed", 0),
+                        "data": data.get("data", []),
+                        "next": data.get("next"),
+                        "has_more": len(data.get("data", [])) > 0
+                    }
+                elif response.status == 404:
+                    return JSONResponse(
+                        status_code=404,
+                        content={
+                            "success": False,
+                            "error": "Job not found or data expired",
+                            "message": "Scraped data may have expired (TTL: 24 hours) or the job never existed"
+                        }
+                    )
+                else:
+                    return JSONResponse(
+                        status_code=response.status,
+                        content={
+                            "success": False,
+                            "error": f"Failed to fetch data: HTTP {response.status}"
+                        }
+                    )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e)
+            }
+        )
 
 
 @app.get("/api/metrics")

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scraped Data - Job {{ job_id }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .markdown-content {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .markdown-content pre {
+            background: #1e293b;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen text-white">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <a href="/" class="inline-flex items-center text-blue-400 hover:text-blue-300 mb-4">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Back to Dashboard
+            </a>
+            <h1 class="text-3xl font-bold mb-2">Scraped Data Viewer</h1>
+            <p class="text-slate-400">Job ID: <span class="font-mono text-sm">{{ job_id }}</span></p>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+            <p class="mt-4 text-slate-400">Loading scraped data...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error" class="hidden">
+            <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-6">
+                <div class="flex items-start">
+                    <svg class="w-6 h-6 text-red-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <div>
+                        <h3 class="text-lg font-semibold text-red-300 mb-2">Error Loading Data</h3>
+                        <p id="error-message" class="text-slate-300"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Display -->
+        <div id="data-container" class="hidden">
+            <!-- Job Status Info -->
+            <div id="job-info" class="bg-slate-800/50 rounded-lg p-6 mb-6 border border-slate-700/50">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <p class="text-slate-400 text-sm mb-1">Status</p>
+                        <p id="job-status" class="text-lg font-semibold"></p>
+                    </div>
+                    <div>
+                        <p class="text-slate-400 text-sm mb-1">Total Pages</p>
+                        <p id="job-total" class="text-lg font-semibold"></p>
+                    </div>
+                    <div>
+                        <p class="text-slate-400 text-sm mb-1">Completed</p>
+                        <p id="job-completed" class="text-lg font-semibold"></p>
+                    </div>
+                    <div>
+                        <p class="text-slate-400 text-sm mb-1">Data Available</p>
+                        <p id="data-count" class="text-lg font-semibold"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- No Data Message -->
+            <div id="no-data" class="hidden bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-6 mb-6">
+                <div class="flex items-start">
+                    <svg class="w-6 h-6 text-yellow-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <div>
+                        <h3 class="text-lg font-semibold text-yellow-300 mb-2">No Data Available</h3>
+                        <p class="text-slate-300">This job has no scraped data available. This could mean:</p>
+                        <ul class="list-disc list-inside mt-2 text-slate-400 space-y-1">
+                            <li>The data has expired (TTL: 24 hours after completion)</li>
+                            <li>The job is still running</li>
+                            <li>The job failed to scrape any pages</li>
+                            <li>Database authentication is not enabled (data not persisted)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scraped Pages -->
+            <div id="pages-container"></div>
+        </div>
+    </div>
+
+    <script>
+        const jobId = "{{ job_id }}";
+
+        async function loadScrapedData() {
+            try {
+                const response = await fetch(`/api/jobs/${jobId}/data?limit=100`);
+                const result = await response.json();
+
+                document.getElementById('loading').classList.add('hidden');
+
+                if (!result.success) {
+                    document.getElementById('error').classList.remove('hidden');
+                    document.getElementById('error-message').textContent = result.message || result.error;
+                    return;
+                }
+
+                document.getElementById('data-container').classList.remove('hidden');
+
+                // Update job info
+                document.getElementById('job-status').textContent = result.status || 'Unknown';
+                document.getElementById('job-total').textContent = result.total || 0;
+                document.getElementById('job-completed').textContent = result.completed || 0;
+                document.getElementById('data-count').textContent = result.data?.length || 0;
+
+                // Show no data message if empty
+                if (!result.data || result.data.length === 0) {
+                    document.getElementById('no-data').classList.remove('hidden');
+                    return;
+                }
+
+                // Render scraped pages
+                const pagesContainer = document.getElementById('pages-container');
+                result.data.forEach((page, index) => {
+                    const pageCard = createPageCard(page, index);
+                    pagesContainer.appendChild(pageCard);
+                });
+
+            } catch (error) {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('error').classList.remove('hidden');
+                document.getElementById('error-message').textContent = `Failed to load data: ${error.message}`;
+            }
+        }
+
+        function createPageCard(page, index) {
+            const card = document.createElement('div');
+            card.className = 'bg-slate-800/50 rounded-lg p-6 mb-4 border border-slate-700/50';
+
+            const header = document.createElement('div');
+            header.className = 'flex justify-between items-start mb-4';
+            header.innerHTML = `
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-xs font-mono px-2 py-1 rounded bg-blue-500/20 text-blue-300">Page ${index + 1}</span>
+                        ${page.metadata?.statusCode ? `<span class="text-xs font-mono px-2 py-1 rounded ${page.metadata.statusCode === 200 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}">${page.metadata.statusCode}</span>` : ''}
+                    </div>
+                    <a href="${page.metadata?.sourceURL || page.url || '#'}" target="_blank" class="text-blue-400 hover:text-blue-300 font-medium break-all">${page.metadata?.sourceURL || page.url || 'Unknown URL'}</a>
+                    ${page.metadata?.title ? `<p class="text-slate-300 mt-1">${page.metadata.title}</p>` : ''}
+                </div>
+            `;
+
+            const content = document.createElement('div');
+            content.className = 'mt-4';
+
+            // Tabs for different content types
+            const tabs = document.createElement('div');
+            tabs.className = 'flex gap-2 mb-4 border-b border-slate-700';
+
+            const availableTabs = [];
+            if (page.markdown) availableTabs.push({ name: 'markdown', label: 'Markdown' });
+            if (page.html) availableTabs.push({ name: 'html', label: 'HTML' });
+            if (page.rawHtml) availableTabs.push({ name: 'rawHtml', label: 'Raw HTML' });
+            if (page.links) availableTabs.push({ name: 'links', label: `Links (${page.links.length})` });
+
+            availableTabs.forEach((tab, tabIndex) => {
+                const tabBtn = document.createElement('button');
+                tabBtn.className = `px-4 py-2 text-sm font-medium ${tabIndex === 0 ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-400 hover:text-slate-300'}`;
+                tabBtn.textContent = tab.label;
+                tabBtn.onclick = () => showTabContent(index, tab.name, tabBtn);
+                tabs.appendChild(tabBtn);
+            });
+
+            const tabContent = document.createElement('div');
+            tabContent.id = `tab-content-${index}`;
+            tabContent.className = 'markdown-content';
+
+            if (availableTabs.length > 0) {
+                showInitialTabContent(tabContent, page, availableTabs[0].name);
+            }
+
+            content.appendChild(tabs);
+            content.appendChild(tabContent);
+            card.appendChild(header);
+            card.appendChild(content);
+
+            return card;
+        }
+
+        function showInitialTabContent(container, page, tabName) {
+            container.innerHTML = '';
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'bg-slate-900/50 rounded p-4 text-sm font-mono whitespace-pre-wrap overflow-x-auto';
+
+            if (tabName === 'markdown') {
+                contentDiv.textContent = page.markdown || 'No markdown content';
+            } else if (tabName === 'html') {
+                contentDiv.textContent = page.html || 'No HTML content';
+            } else if (tabName === 'rawHtml') {
+                contentDiv.textContent = page.rawHtml || 'No raw HTML content';
+            } else if (tabName === 'links' && page.links) {
+                contentDiv.className = 'space-y-2';
+                contentDiv.innerHTML = page.links.map(link =>
+                    `<div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                        </svg>
+                        <a href="${link}" target="_blank" class="text-blue-400 hover:text-blue-300 break-all">${link}</a>
+                    </div>`
+                ).join('');
+            }
+
+            container.appendChild(contentDiv);
+        }
+
+        function showTabContent(pageIndex, tabName, clickedTab) {
+            // Update tab styles
+            const tabs = clickedTab.parentElement.children;
+            Array.from(tabs).forEach(tab => {
+                tab.className = 'px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-300';
+            });
+            clickedTab.className = 'px-4 py-2 text-sm font-medium text-blue-400 border-b-2 border-blue-400';
+
+            // Note: In a full implementation, you'd need to store the page data and update the content
+            // For now, this just updates the tab styling
+        }
+
+        // Load data on page load
+        loadScrapedData();
+    </script>
+</body>
+</html>
